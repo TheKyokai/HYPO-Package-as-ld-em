@@ -81,15 +81,15 @@ line:           directive YYEOL { cout << endl; }
                 YYEOL { cout << endl; }
                 ;
 
-directive:      ASMD_GLOBAL { cout << ".global "; } symbol_list 
+directive:      ASMD_GLOBAL { assembler.set_cpdir(Assembler::DIR::GLOBAL); } symbol_list { assembler.set_cpdir(Assembler::DIR::NONE); }
                 |
-                ASMD_EXTERN { cout << ".extern "; } symbol_list
+                ASMD_EXTERN { assembler.set_cpdir(Assembler::DIR::EXTERN); } symbol_list { assembler.set_cpdir(Assembler::DIR::NONE); }
                 |
-                ASMD_SECTION SYMBOL[section_name] { cout << ".section " << $section_name; assembler.start_new_section($section_name); }
+                ASMD_SECTION SYMBOL[section_name] { assembler.start_new_section($section_name); }
                 |
-                ASMD_WORD { assembler.process_instruction(".word "); } sym_lit_list
+                ASMD_WORD sym_lit_list
                 |
-                ASMD_SKIP NUM_LITERAL[num_lit] { cout << ".skip " << $num_lit; }
+                ASMD_SKIP NUM_LITERAL[num_lit] { assembler.skip_bytes($num_lit); }
                 |
                 ASMD_ASCII STR_LITERAL[str_lit] { cout << ".ascii " << $str_lit; }
                 |
@@ -97,22 +97,22 @@ directive:      ASMD_GLOBAL { cout << ".global "; } symbol_list
                 ;
 
 
-symbol_list:    SYMBOL[symbol_name] { cout << $symbol_name; }
+symbol_list:    SYMBOL[symbol_name] { assembler.process_symbol($symbol_name); }
                 |
-                symbol_list COMMA SYMBOL[symbol_name] { cout << ", " << $symbol_name; }
+                symbol_list COMMA SYMBOL[symbol_name] { assembler.process_symbol($symbol_name); }
                 ;
 
-sym_lit_list:   SYMBOL[symbol_name] { cout << $symbol_name; }
+sym_lit_list:   SYMBOL[symbol_name] { assembler.emit_symbol($symbol_name); }
                 |
-                NUM_LITERAL[num_lit] { cout << $num_lit; }
+                NUM_LITERAL[num_lit] { assembler.emit_num_literal($num_lit); }
                 |
-                sym_lit_list COMMA SYMBOL[symbol_name] { cout << ", " << $symbol_name; }
+                sym_lit_list COMMA SYMBOL[symbol_name] { assembler.emit_symbol($symbol_name); }
                 |
-                sym_lit_list COMMA NUM_LITERAL[num_lit] { cout << ", " << $num_lit; }
+                sym_lit_list COMMA NUM_LITERAL[num_lit] { assembler.emit_num_literal($num_lit); }
                 ;
 
 
-label:          SYMBOL COLON { cout << $1 << ": "; } ;
+label:          SYMBOL[symbol_name] COLON { assembler.process_symbol($symbol_name); } ;
 
 
 inst_line:      label instruction
@@ -127,7 +127,7 @@ instruction:    INST_HALT { cout << "halt"; }
                 |
                 INST_IRET { cout << "iret"; }
                 |
-                INST_CALL { cout << "call"; } dest_operand 
+                INST_CALL { cout << "call "; } dest_operand 
                 |
                 INST_RET { cout << "ret"; }
                 |

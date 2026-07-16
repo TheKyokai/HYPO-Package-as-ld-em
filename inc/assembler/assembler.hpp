@@ -8,33 +8,43 @@
 using namespace std;
 
 class Assembler 
-{
-    public:
-        Assembler(string& src_file, string& obj_file):src_filename(src_file), obj_filename(obj_file) {}
- 
-        void process_source();
+{    
+public:
+
+    enum DIR 
+    {
+        NONE,
+        GLOBAL,
+        EXTERN
+    };
+
+    Assembler(string& src_file, string& obj_file):src_filename(src_file), obj_filename(obj_file) {}
+
+    void process_source();
+
+    void start_new_section(string sctn_name);
+
+    void set_cpdir(DIR cpd);
+
+    void process_symbol(string sym);
+
+    void emit_symbol(string sym);
+    void emit_num_literal(int num);
+    void skip_bytes(int num);
+
+private:
+
+    DIR current_proc_dir = DIR::NONE;
+
+    string src_filename;
+    string obj_filename;
     
-        void process_instruction(string instr);
+    symbol_table symtab;
 
-        void start_new_section(string sctn_name);
+    section* current_section = nullptr;
+    vector<section*> sections;
 
-        void start_dir_global() {}
-        void end_dir_global() {}
-
-        void start_dir_extern() {}
-        void end_dir_extern() {}
-
-    private:
-        
-        string src_filename;
-        string obj_filename;
-        
-        symbol_table symtab;
-
-        section* current_section = nullptr;
-        vector<section*> sections;
-
-        unordered_map<string, int> sctn_name_map;
+    unordered_map<string, int> sctn_name_map;
 };
 
 #endif // ASSEMBLER_HPP

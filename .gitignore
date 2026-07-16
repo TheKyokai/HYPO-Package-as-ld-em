@@ -1,2 +1,6 @@
 bin/
 build/
+src/assembler/scanner.cpp
+src/assembler/parser.cpp
+inc/assembler/parser.hpp
+inc/assembler/loc.hpp

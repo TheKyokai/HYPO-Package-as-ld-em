@@ -3,7 +3,7 @@
 #include <iomanip>
 
 
-symbol_table::sym_tab_row* symbol_table::get_symbol_by_name(string& sym_name)
+symbol_table::symbol* symbol_table::get_symbol_by_name(string& sym_name)
 {
     auto it = index_map.find(sym_name);
     if (it == index_map.end())
@@ -14,7 +14,7 @@ symbol_table::sym_tab_row* symbol_table::get_symbol_by_name(string& sym_name)
 }
 
 
-vector<symbol_table::sym_tab_row*>& symbol_table::get_symbols()
+vector<symbol_table::symbol*>& symbol_table::get_symbols()
 {
     return sym_tab;
 }
@@ -22,14 +22,14 @@ vector<symbol_table::sym_tab_row*>& symbol_table::get_symbols()
 
 int symbol_table::insert_symbol(uint32_t value, TYPE type, BIND bind, string& sym_name, bool extern_sym, uint32_t ndx)
 {
-    sym_tab_row* sym = get_symbol_by_name(sym_name);
+    symbol* sym = get_symbol_by_name(sym_name);
     if (sym != nullptr)
         return -1;
     
-    if (type == TYPE::NOTYP && !extern_sym)
+    if (type == TYPE::NOTYP && !extern_sym && ndx != NDX::UND && ndx != NDX::EXT && ndx != NDX::ABS)
     {
         // Invalid ndx
-        if (sym_tab.size() < ndx)
+        if (ndx > sym_tab.size())
             return -2;
 
         // Symbol at ndx not SCTN type
@@ -40,7 +40,7 @@ int symbol_table::insert_symbol(uint32_t value, TYPE type, BIND bind, string& sy
     // SCTN refers to itself
     uint32_t index = type == TYPE::NOTYP ? ndx : current_num;
 
-    sym = new sym_tab_row(current_num, value, type, bind, index, sym_name);
+    sym = new symbol(current_num, value, type, bind, index, sym_name);
     sym_tab.push_back(sym);
     index_map[sym_name] = current_num++;
 
@@ -50,7 +50,7 @@ int symbol_table::insert_symbol(uint32_t value, TYPE type, BIND bind, string& sy
 
 int symbol_table::set_section_size(string& section_name, uint32_t size)
 {
-    sym_tab_row* sym = get_symbol_by_name(section_name);
+    symbol* sym = get_symbol_by_name(section_name);
     if (sym == nullptr)
         return -1;
 
@@ -62,7 +62,7 @@ int symbol_table::set_section_size(string& section_name, uint32_t size)
 symbol_table::symbol_table()
 {   
     string sym_name_und("");
-    sym_tab_row* sym = new sym_tab_row(current_num, 0, TYPE::NOTYP, BIND::LOC, NDX::UND, sym_name_und);
+    symbol* sym = new symbol(current_num, 0, TYPE::NOTYP, BIND::LOC, NDX::UND, sym_name_und);
     sym_tab.push_back(sym);
     index_map[sym_name_und] = current_num++;
 }
@@ -70,7 +70,7 @@ symbol_table::symbol_table()
 
 symbol_table::~symbol_table()
 {
-    for (sym_tab_row* row:sym_tab)
+    for (symbol* row:sym_tab)
         delete row;
 }
 
@@ -91,7 +91,7 @@ void symbol_table::print_sym_tab()
 
     cout << string(60, '-') << endl;
 
-    for (sym_tab_row* sym : sym_tab)
+    for (symbol* sym : sym_tab)
     {
         string type;
         switch (sym->type)
@@ -115,14 +115,33 @@ void symbol_table::print_sym_tab()
                 break;
         }
 
+        string ndx;
+        switch (sym->ndx)
+        {
+        case UND:
+            ndx = "UND";
+            break;
+        case EXT:
+            ndx = "EXT";
+            break;
+        case ABS:
+            ndx = "ABS";
+            break;
+        default:
+            ndx = to_string(sym->ndx);
+            break;
+        }
+
         cout << left
                   << setw(5)  << sym->num
                   << setw(12) << sym->value
                   << setw(8)  << sym->size
                   << setw(10) << type
                   << setw(10) << bind
-                  << setw(8)  << sym->ndx
+                  << setw(8)  << ndx
                   << sym->name
                   << endl;
     }
+
+    cout << endl;
 }

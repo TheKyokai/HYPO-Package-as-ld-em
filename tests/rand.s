@@ -60,18 +60,18 @@ my_start:
 
 .section my_data
 value1:
-.word 0
+.word 1
 value2:
-.word 0
+.word 2
 value3:
-.word 0
+.word 3
 value4:
-.word 0
+.word 4
 value5:
-.word 0
+.word 5
 value6:
-.word 0
+.word 6
 value7:
-.word 0
+.word 7
 
 .end

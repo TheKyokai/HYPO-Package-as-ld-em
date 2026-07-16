@@ -55,6 +55,18 @@ uint32_t section::get_location_ctr()
 }
 
 
+string& section::get_name()
+{
+    return name;
+}
+
+
+uint32_t section::get_ndx()
+{
+    return ndx;
+}
+
+
 void section::print_rela()
 {
     cout << "\n.rela." << name << '\n';

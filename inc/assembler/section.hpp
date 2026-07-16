@@ -29,7 +29,7 @@ public:
         rela_entry(uint32_t offset, RELA_TYPE type, uint32_t symbol, uint32_t addend): offset(offset), type(type), symbol(symbol), addend(addend) {}
     };
 
-    section(string sctn_name): name(sctn_name) {}
+    section(string sctn_name, uint32_t ndx): name(sctn_name), ndx(ndx) {}
 
     int insert_rela_entry(uint32_t offset, RELA_TYPE type, uint32_t symbol, uint32_t addend);
     void emit_byte(uint8_t byte);
@@ -37,9 +37,11 @@ public:
     void emit_dword(uint32_t word);
 
     uint32_t get_location_ctr();
+    string& get_name();
     vector<rela_entry>& get_rela();
     vector<uint8_t>& get_data();
-
+    
+    uint32_t get_ndx();
 
     void print_rela();
     void print_data();
@@ -51,6 +53,8 @@ private:
     string name;
     vector<uint8_t> data;
     vector<rela_entry> rela;
+
+    uint32_t ndx;
 };
 
 
