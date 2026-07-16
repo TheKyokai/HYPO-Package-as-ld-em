@@ -28,6 +28,9 @@ void Assembler::process_source()
     fclose(fp);
 
     symtab.print_sym_tab();
+    for (section* sec: sections)
+        sec->print_section();
+
 }
 
 void Assembler::process_instruction(string instr)
@@ -38,7 +41,17 @@ void Assembler::process_instruction(string instr)
 
 void Assembler::start_new_section(string sctn_name)
 {
-    //TODO Placeholder for symtab testing -> Write section code
-    int status = symtab.insert_symbol(0, symbol_table::TYPE::SCTN, symbol_table::BIND::LOC, sctn_name);
+    auto it = sctn_name_map.find(sctn_name);
+    if (it != sctn_name_map.end())
+    {
+        cerr << "Section '" << sctn_name << "' already exists" << endl;
+        return;
+    }
+
+    // Could be better -> decide what type of check to use -> map or symtab
+    current_section = new section(sctn_name);
+    sections.push_back(current_section);
+    symtab.insert_symbol(0, symbol_table::TYPE::SCTN, symbol_table::BIND::LOC, sctn_name);
+    
     //TODO Add error handling -> Let the parser parse the whole file, but dont generate anything
 }

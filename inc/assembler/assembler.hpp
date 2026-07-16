@@ -3,6 +3,7 @@
 
 #include <string>
 #include <assembler/symbol_table.hpp>
+#include <assembler/section.hpp>
 
 using namespace std;
 
@@ -27,7 +28,13 @@ class Assembler
         
         string src_filename;
         string obj_filename;
+        
         symbol_table symtab;
+
+        section* current_section = nullptr;
+        vector<section*> sections;
+
+        unordered_map<string, int> sctn_name_map;
 };
 
 #endif // ASSEMBLER_HPP

@@ -77,21 +77,23 @@ symbol_table::~symbol_table()
 
 void symbol_table::print_sym_tab()
 {
-    std::cout << std::left
-              << std::setw(5)  << "Num"
-              << std::setw(12) << "Value"
-              << std::setw(8)  << "Size"
-              << std::setw(10) << "Type"
-              << std::setw(10) << "Bind"
-              << std::setw(8)  << "Ndx"
-              << "Name"
-              << std::endl;
+    cout << ".symtab\n\n";
 
-    std::cout << std::string(60, '-') << std::endl;
+    cout << left
+              << setw(5)  << "Num"
+              << setw(12) << "Value"
+              << setw(8)  << "Size"
+              << setw(10) << "Type"
+              << setw(10) << "Bind"
+              << setw(8)  << "Ndx"
+              << "Name"
+              << endl;
+
+    cout << string(60, '-') << endl;
 
     for (sym_tab_row* sym : sym_tab)
     {
-        std::string type;
+        string type;
         switch (sym->type)
         {
             case NOTYP:
@@ -102,7 +104,7 @@ void symbol_table::print_sym_tab()
                 break;
         }
 
-        std::string bind;
+        string bind;
         switch (sym->bind)
         {
             case LOC:
@@ -113,14 +115,14 @@ void symbol_table::print_sym_tab()
                 break;
         }
 
-        std::cout << std::left
-                  << std::setw(5)  << sym->num
-                  << std::setw(12) << sym->value
-                  << std::setw(8)  << sym->size
-                  << std::setw(10) << type
-                  << std::setw(10) << bind
-                  << std::setw(8)  << sym->ndx
+        cout << left
+                  << setw(5)  << sym->num
+                  << setw(12) << sym->value
+                  << setw(8)  << sym->size
+                  << setw(10) << type
+                  << setw(10) << bind
+                  << setw(8)  << sym->ndx
                   << sym->name
-                  << std::endl;
+                  << endl;
     }
 }
