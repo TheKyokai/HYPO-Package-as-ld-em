@@ -1,0 +1,206 @@
+%{
+
+#include <iostream>
+using namespace std;
+
+%}
+
+
+%code requires 
+{
+
+#include "assembler.hpp"
+
+}
+
+%code provides 
+{
+
+yy::parser::symbol_type yylex();
+
+}
+
+%require "3.2"
+%language "c++"
+%skeleton "lalr1.cc"
+
+
+%define api.token.raw
+
+%define api.token.constructor
+%define api.value.type variant
+%define parse.assert
+
+%locations
+%define api.location.file "../../inc/assembler/loc.hpp"
+%define api.location.include {"loc.hpp"}
+
+%define parse.trace
+%define parse.error verbose
+%define parse.lac full
+
+%parse-param { Assembler& assembler }
+
+
+
+%token ASMD_GLOBAL ASMD_EXTERN ASMD_SECTION ASMD_WORD ASMD_SKIP ASMD_END ASMD_ASCII ASMD_EQU
+
+%token INST_HALT INST_INT INST_IRET
+%token INST_CALL INST_RET
+%token INST_JMP INST_BEQ INST_BNE INST_BGT
+%token INST_PUSH INST_POP INST_LD INST_ST
+%token INST_ADD INST_SUB INST_MUL INST_DIV
+%token INST_NOT INST_AND INST_OR INST_XOR INST_SHL INST_SHR
+%token INST_XCHG INST_CSRRD INST_CSRWR
+
+%token <int> GPR CSR
+
+%token COLON COMMA IMM_PREFIX L_BRACKET R_BRACKET YYEOL
+%token PLUS MINUS MUL DIV
+
+%token <int> NUM_LITERAL
+%token <string> SYMBOL STR_LITERAL
+
+%%
+
+%start program;
+
+program:        lines ASMD_END { cout << ".end\n\n"; YYACCEPT; };
+
+lines:          %empty
+                |
+                lines line
+                ;
+
+line:           directive YYEOL { cout << endl; }
+                |
+                inst_line YYEOL { cout << endl; }
+                |
+                label YYEOL { cout << endl; }
+                |
+                YYEOL { cout << endl; }
+                ;
+
+directive:      ASMD_GLOBAL { cout << ".global "; } symbol_list 
+                |
+                ASMD_EXTERN { cout << ".extern "; } symbol_list
+                |
+                ASMD_SECTION SYMBOL[section_name] { cout << ".section " << $section_name; assembler.start_new_section($section_name); }
+                |
+                ASMD_WORD { assembler.process_instruction(".word "); } sym_lit_list
+                |
+                ASMD_SKIP NUM_LITERAL[num_lit] { cout << ".skip " << $num_lit; }
+                |
+                ASMD_ASCII STR_LITERAL[str_lit] { cout << ".ascii " << $str_lit; }
+                |
+                ASMD_EQU SYMBOL[new_symbol] COMMA NUM_LITERAL[val] { cout << ".equ " << $new_symbol << ", " << $val; }
+                ;
+
+
+symbol_list:    SYMBOL[symbol_name] { cout << $symbol_name; }
+                |
+                symbol_list COMMA SYMBOL[symbol_name] { cout << ", " << $symbol_name; }
+                ;
+
+sym_lit_list:   SYMBOL[symbol_name] { cout << $symbol_name; }
+                |
+                NUM_LITERAL[num_lit] { cout << $num_lit; }
+                |
+                sym_lit_list COMMA SYMBOL[symbol_name] { cout << ", " << $symbol_name; }
+                |
+                sym_lit_list COMMA NUM_LITERAL[num_lit] { cout << ", " << $num_lit; }
+                ;
+
+
+label:          SYMBOL COLON { cout << $1 << ": "; } ;
+
+
+inst_line:      label instruction
+                |
+                instruction
+                ;
+
+
+instruction:    INST_HALT { cout << "halt"; }
+                |
+                INST_INT { cout << "int"; }
+                |
+                INST_IRET { cout << "iret"; }
+                |
+                INST_CALL { cout << "call"; } dest_operand 
+                |
+                INST_RET { cout << "ret"; }
+                |
+                INST_JMP { cout << "jmp"; } dest_operand
+                |
+                INST_BEQ GPR COMMA GPR COMMA { cout << "beq %r" << $2 << ", %r" << $4 << " "; } dest_operand
+                |
+                INST_BNE GPR COMMA GPR COMMA { cout << "beq %r" << $2 << ", %r" << $4 << " "; } dest_operand
+                |
+                INST_BGT GPR COMMA GPR COMMA { cout << "beq %r" << $2 << ", %r" << $4 << " "; } dest_operand
+                |
+                INST_PUSH GPR { cout << "push %r" << $2; }
+                |
+                INST_POP GPR { cout << "pop %r" << $2; }
+                |
+                INST_XCHG GPR COMMA GPR { cout << "xchg %r" << $2 << ", %r" << $4; }
+                |
+                INST_ADD GPR COMMA GPR { cout << "add %r" << $2 << ", %r" << $4; }
+                |
+                INST_SUB GPR COMMA GPR { cout << "sub %r" << $2 << ", %r" << $4; }
+                |
+                INST_MUL GPR COMMA GPR { cout << "mul %r" << $2 << ", %r" << $4; }
+                |
+                INST_DIV GPR COMMA GPR { cout << "div %r" << $2 << ", %r" << $4; }
+                |
+                INST_NOT GPR { cout << "not %r" << $2; }
+                |
+                INST_AND GPR COMMA GPR { cout << "and %r" << $2 << ", %r" << $4; }
+                |
+                INST_OR GPR COMMA GPR { cout << "or %r" << $2 << ", %r" << $4; }
+                |
+                INST_XOR GPR COMMA GPR { cout << "xor %r" << $2 << ", %r" << $4; }
+                |
+                INST_SHL GPR COMMA GPR { cout << "shl %r" << $2 << ", %r" << $4; }
+                |
+                INST_SHR GPR COMMA GPR { cout << "shr %r" << $2 << ", %r" << $4; }
+                |
+                INST_LD { cout << "ld "; } operand COMMA GPR { cout << ", %r" << $5; }
+                |
+                INST_ST GPR COMMA { cout << "st %r" << $2 << ", "; } operand
+                |
+                INST_CSRRD CSR COMMA GPR { cout << "csrrd %csr" << $2 << ", %r" << $4; }
+                |
+                INST_CSRWR GPR COMMA CSR { cout << "csrwr %r" << $2 << ", %csr" << $4; }
+                ;
+
+
+dest_operand:   NUM_LITERAL[num_lit] { cout << $num_lit; } 
+                |
+                SYMBOL[symbol_name] { cout << $symbol_name; }
+                ;
+
+operand:        IMM_PREFIX NUM_LITERAL[num_lit] { cout << "$" << $num_lit; }
+                |
+                IMM_PREFIX SYMBOL[symbol_name] { cout << "$" << $symbol_name; }
+                |
+                NUM_LITERAL[num_lit] { cout << $num_lit; }
+                |
+                SYMBOL[symbol_name] { cout << $symbol_name; }
+                |
+                GPR { cout << "%r" << $1; }
+                |
+                L_BRACKET GPR R_BRACKET { cout << "[ %r" << $2 << " ]"; }
+                |
+                L_BRACKET GPR PLUS NUM_LITERAL R_BRACKET { cout << "[ %r" << $2 << " + " << $4 << " ]"; }
+                |
+                L_BRACKET GPR PLUS SYMBOL R_BRACKET { cout << "[ %r" << $2 << " + " << $4 << " ]"; }
+                ;
+
+%%
+
+
+void yy::parser::error(const yy::location& l, const std::string& m)
+{
+    std::cerr << l << ": " << m << std::endl;
+}
