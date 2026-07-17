@@ -32,6 +32,10 @@ public:
     void emit_num_literal(int num);
     void skip_bytes(int num);
 
+    void emit_byte(uint8_t byte);
+    void emit_word(uint16_t word);
+    void emit_dword(uint32_t dword);
+
 private:
 
     DIR current_proc_dir = DIR::NONE;

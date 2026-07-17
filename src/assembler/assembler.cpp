@@ -161,3 +161,34 @@ void Assembler::skip_bytes(int num)
         num--;
     }
 }
+
+
+void Assembler::emit_byte(uint8_t byte)
+{
+    if (!current_section)
+    {
+        cerr << "Unexpected generation" << endl;
+        return;
+    }
+    current_section->emit_byte(byte);
+}
+
+void Assembler::emit_word(uint16_t word)
+{
+    if (!current_section)
+    {
+        cerr << "Unexpected generation" << endl;
+        return;
+    }
+    current_section->emit_word(word);
+}
+
+void Assembler::emit_dword(uint32_t dword)
+{
+    if (!current_section)
+    {
+        cerr << "Unexpected generation" << endl;
+        return;
+    }
+    current_section->emit_dword(dword);
+}

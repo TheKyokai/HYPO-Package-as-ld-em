@@ -121,15 +121,15 @@ inst_line:      label instruction
                 ;
 
 
-instruction:    INST_HALT { cout << "halt"; }
+instruction:    INST_HALT { assembler.emit_dword(0x00000000); }
                 |
-                INST_INT { cout << "int"; }
+                INST_INT { assembler.emit_dword(0x10000000); }
                 |
-                INST_IRET { cout << "iret"; }
+                INST_IRET { assembler.emit_dword(0x0); }
                 |
                 INST_CALL { cout << "call "; } dest_operand 
                 |
-                INST_RET { cout << "ret"; }
+                INST_RET { assembler.emit_dword(0x93FE0FFC); }
                 |
                 INST_JMP { cout << "jmp"; } dest_operand
                 |
@@ -139,39 +139,39 @@ instruction:    INST_HALT { cout << "halt"; }
                 |
                 INST_BGT GPR COMMA GPR COMMA { cout << "beq %r" << $2 << ", %r" << $4 << " "; } dest_operand
                 |
-                INST_PUSH GPR { cout << "push %r" << $2; }
+                INST_PUSH GPR { assembler.emit_dword(0x81E00004 | ($2 << 12)); }
                 |
-                INST_POP GPR { cout << "pop %r" << $2; }
+                INST_POP GPR { assembler.emit_dword(0x930E0FFC | ($2 << 20)); }
                 |
-                INST_XCHG GPR COMMA GPR { cout << "xchg %r" << $2 << ", %r" << $4; }
+                INST_XCHG GPR COMMA GPR { assembler.emit_dword(0x40000000 | ($2 << 16) | ($4 << 12)); }
                 |
-                INST_ADD GPR COMMA GPR { cout << "add %r" << $2 << ", %r" << $4; }
+                INST_ADD GPR COMMA GPR { assembler.emit_dword(0x50000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
                 |
-                INST_SUB GPR COMMA GPR { cout << "sub %r" << $2 << ", %r" << $4; }
+                INST_SUB GPR COMMA GPR { assembler.emit_dword(0x51000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
                 |
-                INST_MUL GPR COMMA GPR { cout << "mul %r" << $2 << ", %r" << $4; }
+                INST_MUL GPR COMMA GPR { assembler.emit_dword(0x52000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
                 |
-                INST_DIV GPR COMMA GPR { cout << "div %r" << $2 << ", %r" << $4; }
+                INST_DIV GPR COMMA GPR { assembler.emit_dword(0x53000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
                 |
-                INST_NOT GPR { cout << "not %r" << $2; }
+                INST_NOT GPR { assembler.emit_dword(0x60000000 | ($2 << 20) | ($2 << 16)); }
                 |
-                INST_AND GPR COMMA GPR { cout << "and %r" << $2 << ", %r" << $4; }
+                INST_AND GPR COMMA GPR { assembler.emit_dword(0x61000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
                 |
-                INST_OR GPR COMMA GPR { cout << "or %r" << $2 << ", %r" << $4; }
+                INST_OR GPR COMMA GPR { assembler.emit_dword(0x62000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
                 |
-                INST_XOR GPR COMMA GPR { cout << "xor %r" << $2 << ", %r" << $4; }
+                INST_XOR GPR COMMA GPR { assembler.emit_dword(0x63000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
                 |
-                INST_SHL GPR COMMA GPR { cout << "shl %r" << $2 << ", %r" << $4; }
+                INST_SHL GPR COMMA GPR { assembler.emit_dword(0x70000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
                 |
-                INST_SHR GPR COMMA GPR { cout << "shr %r" << $2 << ", %r" << $4; }
+                INST_SHR GPR COMMA GPR { assembler.emit_dword(0x71000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
                 |
                 INST_LD { cout << "ld "; } operand COMMA GPR { cout << ", %r" << $5; }
                 |
                 INST_ST GPR COMMA { cout << "st %r" << $2 << ", "; } operand
                 |
-                INST_CSRRD CSR COMMA GPR { cout << "csrrd %csr" << $2 << ", %r" << $4; }
+                INST_CSRRD CSR COMMA GPR { assembler.emit_dword(0x90000000 | ($4 << 20) | ($2 << 16)); }
                 |
-                INST_CSRWR GPR COMMA CSR { cout << "csrwr %r" << $2 << ", %csr" << $4; }
+                INST_CSRWR GPR COMMA CSR { assembler.emit_dword(0x91000000 | ($4 << 20) | ($2 << 16)); }
                 ;
 
 
