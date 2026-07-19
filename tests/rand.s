@@ -64,7 +64,7 @@ value1:
 value2:
 .word 2
 value3:
-.word my_data, value2
+.word my_data, value2, value7
 value4:
 .word 4
 value5:
@@ -73,5 +73,9 @@ value6:
 .word 6
 value7:
 .word 7
+string1:
+.ascii "ABCabc"
+string2:
+.ascii "KUKU$"
 
 .end

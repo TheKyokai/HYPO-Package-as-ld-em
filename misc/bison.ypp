@@ -65,20 +65,20 @@ yy::parser::symbol_type yylex();
 
 %start program;
 
-program:        lines ASMD_END { cout << ".end\n\n"; YYACCEPT; };
+program:        lines ASMD_END { YYACCEPT; };
 
 lines:          %empty
                 |
                 lines line
                 ;
 
-line:           directive YYEOL { cout << endl; }
+line:           directive YYEOL 
                 |
-                inst_line YYEOL { cout << endl; }
+                inst_line YYEOL
                 |
-                label YYEOL { cout << endl; }
+                label YYEOL
                 |
-                YYEOL { cout << endl; }
+                YYEOL 
                 ;
 
 directive:      ASMD_GLOBAL { assembler.set_cpdir(Assembler::DIR::GLOBAL); } symbol_list { assembler.set_cpdir(Assembler::DIR::NONE); }
@@ -91,9 +91,9 @@ directive:      ASMD_GLOBAL { assembler.set_cpdir(Assembler::DIR::GLOBAL); } sym
                 |
                 ASMD_SKIP NUM_LITERAL[num_lit] { assembler.skip_bytes($num_lit); }
                 |
-                ASMD_ASCII STR_LITERAL[str_lit] { cout << ".ascii " << $str_lit; }
+                ASMD_ASCII STR_LITERAL[str_lit] { assembler.emit_string($str_lit); }
                 |
-                ASMD_EQU SYMBOL[new_symbol] COMMA NUM_LITERAL[val] { cout << ".equ " << $new_symbol << ", " << $val; }
+                ASMD_EQU SYMBOL[new_symbol] COMMA NUM_LITERAL[val] { cout << ".equ " << $new_symbol << ", " << $val << '\n'; }
                 ;
 
 
@@ -125,19 +125,19 @@ instruction:    INST_HALT { assembler.emit_dword(0x00000000); }
                 |
                 INST_INT { assembler.emit_dword(0x10000000); }
                 |
-                INST_IRET { assembler.emit_dword(0x0); }
+                INST_IRET { assembler.emit_dword(0x960E0004); assembler.emit_dword(0x93FE0008); }
                 |
-                INST_CALL { cout << "call "; } dest_operand 
+                INST_CALL dest_operand { assembler.process_call(); }
                 |
                 INST_RET { assembler.emit_dword(0x93FE0004); }
                 |
-                INST_JMP { cout << "jmp"; } dest_operand
+                INST_JMP dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::JMP); }
                 |
-                INST_BEQ GPR COMMA GPR COMMA { cout << "beq %r" << $2 << ", %r" << $4 << " "; } dest_operand
+                INST_BEQ GPR COMMA GPR COMMA dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::BEQ, $2, $4); }
                 |
-                INST_BNE GPR COMMA GPR COMMA { cout << "beq %r" << $2 << ", %r" << $4 << " "; } dest_operand
+                INST_BNE GPR COMMA GPR COMMA dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::BNE, $2, $4); }
                 |
-                INST_BGT GPR COMMA GPR COMMA { cout << "beq %r" << $2 << ", %r" << $4 << " "; } dest_operand
+                INST_BGT GPR COMMA GPR COMMA dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::BGT, $2, $4); }
                 |
                 INST_PUSH GPR { assembler.emit_dword(0x81E00FFC | ($2 << 12)); }
                 |
@@ -175,26 +175,26 @@ instruction:    INST_HALT { assembler.emit_dword(0x00000000); }
                 ;
 
 
-dest_operand:   NUM_LITERAL[num_lit] { cout << $num_lit; } 
+dest_operand:   NUM_LITERAL[num_lit] { assembler.prepare_operand(Assembler::OPERAND_TYPE::LIT, $num_lit, "", -1); } 
                 |
-                SYMBOL[symbol_name] { cout << $symbol_name; }
+                SYMBOL[symbol_name] { assembler.prepare_operand(Assembler::OPERAND_TYPE::SYM, 0, $symbol_name, -1); } 
                 ;
 
-operand:        IMM_PREFIX NUM_LITERAL[num_lit] { cout << "$" << $num_lit; }
+operand:        IMM_PREFIX NUM_LITERAL[num_lit] { assembler.prepare_operand(Assembler::OPERAND_TYPE::LIT, $num_lit, "", -1); } 
                 |
-                IMM_PREFIX SYMBOL[symbol_name] { cout << "$" << $symbol_name; }
+                IMM_PREFIX SYMBOL[symbol_name] { assembler.prepare_operand(Assembler::OPERAND_TYPE::SYM, 0, $symbol_name, -1); } 
                 |
-                NUM_LITERAL[num_lit] { cout << $num_lit; }
+                NUM_LITERAL[num_lit] { assembler.prepare_operand(Assembler::OPERAND_TYPE::LIT_IND, $num_lit, "", -1); } 
                 |
-                SYMBOL[symbol_name] { cout << $symbol_name; }
+                SYMBOL[symbol_name] { assembler.prepare_operand(Assembler::OPERAND_TYPE::SYM_IND, 0, $symbol_name, -1); } 
                 |
-                GPR { cout << "%r" << $1; }
+                GPR { assembler.prepare_operand(Assembler::OPERAND_TYPE::GPR, 0, "", $1); } 
                 |
-                L_BRACKET GPR R_BRACKET { cout << "[ %r" << $2 << " ]"; }
+                L_BRACKET GPR R_BRACKET { assembler.prepare_operand(Assembler::OPERAND_TYPE::GPR_IND, 0, "", $2); } 
                 |
-                L_BRACKET GPR PLUS NUM_LITERAL R_BRACKET { cout << "[ %r" << $2 << " + " << $4 << " ]"; }
+                L_BRACKET GPR PLUS NUM_LITERAL R_BRACKET { assembler.prepare_operand(Assembler::OPERAND_TYPE::GPR_LIT_DISP, $4, "", $2); } 
                 |
-                L_BRACKET GPR PLUS SYMBOL R_BRACKET { cout << "[ %r" << $2 << " + " << $4 << " ]"; }
+                L_BRACKET GPR PLUS SYMBOL R_BRACKET { assembler.prepare_operand(Assembler::OPERAND_TYPE::GPR_SYM_DISP, 0, $4, $2); } 
                 ;
 
 %%

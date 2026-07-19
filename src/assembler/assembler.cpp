@@ -160,6 +160,19 @@ void Assembler::process_symbol(string sym)
 }
 
 
+// Helper when using a symbol that may not yet be declared or defined
+symbol_table::symbol* Assembler::get_symbol_for_usage(string& sym_name)
+{
+    symbol_table::symbol* sym = symtab.get_symbol_by_name(sym_name);
+    if (!sym)
+    {
+        symtab.insert_symbol(0, symbol_table::TYPE::NOTYP, symbol_table::BIND::LOC, sym_name, symbol_table::NDX::UND, false);
+        sym = symtab.get_symbol_by_name(sym_name);
+    }
+    return sym;
+}
+
+
 // .word and .skip
 void Assembler::emit_symbol(string sym_name)
 {
@@ -169,12 +182,7 @@ void Assembler::emit_symbol(string sym_name)
         cerr << "No section started" << endl;
         return;
     }
-    symbol_table::symbol* sym = symtab.get_symbol_by_name(sym_name);
-    if (!sym)
-    {
-        symtab.insert_symbol(0, symbol_table::TYPE::NOTYP, symbol_table::BIND::LOC, sym_name, symbol_table::NDX::UND, false);
-        sym = symtab.get_symbol_by_name(sym_name);
-    }
+    symbol_table::symbol* sym = get_symbol_for_usage(sym_name);
     if (!sym->defined)
     {
         symtab.insert_forward_reference_entry(sym_name, current_section->get_name(), current_section->get_location_ctr());
@@ -264,3 +272,63 @@ void Assembler::emit_dword(uint32_t dword)
     }
     current_section->emit_dword(dword);
 }
+
+void Assembler::emit_string(string str)
+{
+    if (!current_section)
+    {
+        cerr << "Unexpected generation" << endl;
+        return;
+    }
+    for (char c: str)
+        current_section->emit_byte(c);
+    current_section->emit_byte(0x00);
+}
+
+void Assembler::prepare_operand(OPERAND_TYPE type, uint32_t lit, string sym_name, int gpr)
+{
+    operand_type = type;
+    operand_lit = lit;
+    operand_gpr = gpr;
+    operand_sym = get_symbol_for_usage(sym_name);
+
+    //cout << "\n OPERAND: " << type << ' ' << lit << ' ' << operand_sym->name << ' ' << gpr << '\n';
+}
+
+void Assembler::clear_prepared_operand()
+{
+    operand_type = OPERAND_TYPE::UNUSED;
+    operand_lit = 0;
+    operand_sym = nullptr;
+    operand_gpr = -1;
+}
+
+
+void Assembler::process_call()
+{
+    cout << "\nCALL ";
+    switch(operand_type)
+    {
+        case LIT:
+        {
+            cout << operand_lit << '\n';
+            break;
+        }
+        case SYM:
+        {
+            cout << operand_sym->name << '\n';
+            break;
+        }
+        default:
+            cerr << "Unexpected jump operand" << endl;
+    }
+    clear_prepared_operand();
+}
+
+void Assembler::process_jump(JUMP_TYPE type, int gpr_1, int gpr_2)
+{
+    cout << '\n' << type << '\n';
+
+    clear_prepared_operand();
+}
+
