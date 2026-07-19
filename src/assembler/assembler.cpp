@@ -48,15 +48,40 @@ void Assembler::start_new_section(string sctn_name)
 
     //TODO Could be better -> decide what type of check to use -> map or symtab
     
-    int status = symtab.insert_symbol(0, symbol_table::TYPE::SCTN, symbol_table::BIND::LOC, sctn_name);
-    if (status)
-    {
-        cerr << "Unexpected error" << endl;
-    }
+    if (current_section)
+        symtab.set_section_size(current_section->get_name(), current_section->get_location_ctr());
 
-    symbol_table::symbol* sctn_sym = symtab.get_symbol_by_name(sctn_name);
-    current_section = new section(sctn_name, sctn_sym->ndx);
-    sections.push_back(current_section);
+    int status = symtab.insert_symbol(0, symbol_table::TYPE::SCTN, symbol_table::BIND::LOC, sctn_name);
+    switch (status)
+    {
+        case 0:
+        {
+            // New symbol added to symtab
+            symbol_table::symbol* sctn_sym = symtab.get_symbol_by_name(sctn_name);
+            current_section = new section(sctn_name, sctn_sym->ndx);
+            sections.push_back(current_section);  
+            break;
+        }
+        case -1:
+        {
+            // Previously used symbol
+            symbol_table::symbol* sctn_sym = symtab.get_symbol_by_name(sctn_name);
+            if (sctn_sym->defined)
+            {
+                cerr << "Already defined symbol '" + sctn_name + "' defined as a section" << endl;
+                return;
+            }
+            sctn_sym->type = symbol_table::TYPE::SCTN;
+            sctn_sym->ndx = symtab.get_symbol_num(sctn_name);
+            sctn_sym->defined = true;
+            break;
+        }
+        default:
+        {
+            cerr << "Unexpected error" << endl;
+            return;
+        }
+    }
     //TODO Add error handling -> Let the parser parse the whole file, but dont generate anything
 }
 
@@ -74,9 +99,9 @@ void Assembler::process_symbol(string sym)
         symbol_table::symbol* symbol = symtab.get_symbol_by_name(sym);
         if (symbol == nullptr)
             // global symbol declaration
-            symtab.insert_symbol(0, symbol_table::TYPE::NOTYP, symbol_table::BIND::GLOB, sym);
+            symtab.insert_symbol(0, symbol_table::TYPE::NOTYP, symbol_table::BIND::GLOB, sym, symbol_table::NDX::UND, false);
         else
-            if (symbol->bind == symbol_table::BIND::GLOB && symbol->ndx == symbol_table::NDX::EXT)
+            if (symbol->bind == symbol_table::BIND::GLOB && symbol->ndx == symbol_table::NDX::UND && symbol->defined)
                 cerr << "Declaring external symbol '" << sym << "' global" << endl;
             else
             {
@@ -91,9 +116,9 @@ void Assembler::process_symbol(string sym)
         symbol_table::symbol* symbol = symtab.get_symbol_by_name(sym);
         if (symbol == nullptr)
             // external symbol declaration
-            symtab.insert_symbol(0, symbol_table::TYPE::NOTYP, symbol_table::BIND::GLOB, sym, true, symbol_table::NDX::EXT);
+            symtab.insert_symbol(0, symbol_table::TYPE::NOTYP, symbol_table::BIND::GLOB, sym, symbol_table::NDX::UND, true);
         else
-            if (symbol->ndx != symbol_table::NDX::EXT)
+            if (symbol->ndx != symbol_table::NDX::UND && symbol->defined)
                 cerr << "Declaring a defined symbol '" << sym << "' external" << endl;
         break;
     }
@@ -105,22 +130,26 @@ void Assembler::process_symbol(string sym)
             symtab.insert_symbol(current_section->get_location_ctr(),
                 symbol_table::TYPE::NOTYP,
                 symbol_table::BIND::LOC,
-                sym, false, current_section->get_ndx());
+                sym, current_section->get_ndx());
         else
         {
-            if (symbol->ndx == symbol_table::NDX::EXT)
+            if (symbol->defined)
             {
-                cerr << "Defining '" << sym << "' when it has been declared external" << endl;
-                return;
+                if (symbol->ndx == symbol_table::NDX::UND)
+                {
+                    cerr << "Defining '" << sym << "' when it has been declared external" << endl;
+                    return;
+                }
+                if (symbol->ndx != symbol_table::NDX::UND)
+                {    
+                    cerr << "Redefinition of already existing symbol '" << sym << "'" << endl;
+                    return;
+                }
             }
-            if (symbol->ndx != symbol_table::NDX::UND)
-            {    
-                cerr << "Redefinition of already existing symbol '" << sym << "'" << endl;
-                return;
-            }    
-            // declared but undefined global symbol
+            // undefined global or previously used local symbol
             symbol->value = current_section->get_location_ctr();
             symbol->ndx = current_section->get_ndx();
+            symbol->defined = true;
         }
         break;
     }
@@ -132,19 +161,62 @@ void Assembler::process_symbol(string sym)
 
 
 // .word and .skip
-void Assembler::emit_symbol(string sym)
+void Assembler::emit_symbol(string sym_name)
 {
     // Relocation entry should be created for everything except ABS symbols here since their actual value is needed
-    cout << "emit " << sym << " value\n";
+    if (!current_section)
+    {
+        cerr << "No section started" << endl;
+        return;
+    }
+    symbol_table::symbol* sym = symtab.get_symbol_by_name(sym_name);
+    if (!sym)
+    {
+        symtab.insert_symbol(0, symbol_table::TYPE::NOTYP, symbol_table::BIND::LOC, sym_name, symbol_table::NDX::UND, false);
+        sym = symtab.get_symbol_by_name(sym_name);
+    }
+    if (!sym->defined)
+    {
+        symtab.insert_forward_reference_entry(sym_name, current_section->get_name(), current_section->get_location_ctr());
+    }
+    // No relocation entry needed for ABS symbols
+    if (sym->ndx == symbol_table::NDX::ABS)
+    {
+        emit_dword(sym->value);
+        return;
+    }
+    // Create a relocation entry and allocate memory with zeroes
+    uint32_t symbol_num, addend = 0x00000000;
+    if (sym->bind == symbol_table::BIND::GLOB)    
+        symbol_num = symtab.get_symbol_num(sym_name);
+    else
+    {
+        symbol_num = sym->ndx;
+        addend = sym->value;
+    }
+
+    // In case of undefined symbol rela_entry will also be changed during fixup
+    current_section->insert_rela_entry(current_section->get_location_ctr(), section::RELA_TYPE::R_32, symbol_num, addend);
+    emit_dword(0x00000000);
 }
 
 void Assembler::emit_num_literal(int num)
 {
+    if (!current_section)
+    {
+        cerr << "No section started" << endl;
+        return;
+    }
     current_section->emit_dword(num);
 }
 
 void Assembler::skip_bytes(int num)
 {
+    if (!current_section)
+    {
+        cerr << "No section started" << endl;
+        return;
+    }
     while (num >= 4)
     {
         current_section->emit_dword(0x00000000);

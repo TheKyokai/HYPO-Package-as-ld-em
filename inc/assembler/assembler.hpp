@@ -28,7 +28,7 @@ public:
 
     void process_symbol(string sym);
 
-    void emit_symbol(string sym);
+    void emit_symbol(string sym_name);
     void emit_num_literal(int num);
     void skip_bytes(int num);
 

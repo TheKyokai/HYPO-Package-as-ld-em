@@ -129,7 +129,7 @@ instruction:    INST_HALT { assembler.emit_dword(0x00000000); }
                 |
                 INST_CALL { cout << "call "; } dest_operand 
                 |
-                INST_RET { assembler.emit_dword(0x93FE0FFC); }
+                INST_RET { assembler.emit_dword(0x93FE0004); }
                 |
                 INST_JMP { cout << "jmp"; } dest_operand
                 |
@@ -139,9 +139,9 @@ instruction:    INST_HALT { assembler.emit_dword(0x00000000); }
                 |
                 INST_BGT GPR COMMA GPR COMMA { cout << "beq %r" << $2 << ", %r" << $4 << " "; } dest_operand
                 |
-                INST_PUSH GPR { assembler.emit_dword(0x81E00004 | ($2 << 12)); }
+                INST_PUSH GPR { assembler.emit_dword(0x81E00FFC | ($2 << 12)); }
                 |
-                INST_POP GPR { assembler.emit_dword(0x930E0FFC | ($2 << 20)); }
+                INST_POP GPR { assembler.emit_dword(0x930E0004 | ($2 << 20)); }
                 |
                 INST_XCHG GPR COMMA GPR { assembler.emit_dword(0x40000000 | ($2 << 16) | ($4 << 12)); }
                 |

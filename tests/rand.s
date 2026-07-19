@@ -64,7 +64,7 @@ value1:
 value2:
 .word 2
 value3:
-.word 3
+.word my_data, value2
 value4:
 .word 4
 value5:

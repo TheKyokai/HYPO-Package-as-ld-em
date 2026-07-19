@@ -69,6 +69,7 @@ uint32_t section::get_ndx()
 
 void section::print_rela()
 {
+    //TODO Change the type label -> number for now
     cout << "\n.rela." << name << '\n';
     if (rela.empty()) {
         cout << "(empty)\n";
