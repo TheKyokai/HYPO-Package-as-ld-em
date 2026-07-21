@@ -63,7 +63,7 @@ public:
     vector<symbol*>& get_symbols();
     int get_symbol_num(string& sym_name);
 
-    //TODO Potential extern_sym param removal
+
     int insert_symbol(uint32_t value, TYPE type, BIND bind, string& sym_name, uint32_t ndx = NDX::UND, bool defined=true);
     int set_section_size(string& section_name, uint32_t size);
     int insert_forward_reference_entry(string& referenced_symbol, string& sctn, uint32_t patch_address);

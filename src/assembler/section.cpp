@@ -164,13 +164,3 @@ section::section_hdr section::get_header()
     return header;
 }
 
-void section::print_binary_rela(ostream& os)
-{
-
-}
-
-void section::print_binary_data(ostream& os)
-{
-
-}
-

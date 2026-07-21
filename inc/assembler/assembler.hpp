@@ -243,7 +243,7 @@ private:
         uint32_t symbol_table_offset;
         uint32_t string_table_offset;
         uint32_t relocation_table_offset;
-
+        uint32_t data_offset;
 
         uint32_t file_size;
     };

@@ -50,16 +50,14 @@ public:
     {
         char name[32];
 
-        uint32_t size;
-        uint32_t data_offset;       
-
         uint32_t relocation_count;
+        uint32_t size;
+
         uint32_t relocation_offset; 
+        uint32_t data_offset;
     };
 
     section_hdr get_header();
-    void print_binary_rela(ostream& os);
-    void print_binary_data(ostream& os);
 
 private:
     uint32_t location_counter = 0;
@@ -68,8 +66,6 @@ private:
     vector<rela_entry> rela;
 
     uint32_t ndx;
-
-    
 };
 
 

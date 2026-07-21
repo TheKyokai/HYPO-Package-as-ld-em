@@ -93,6 +93,7 @@ void Assembler::generate_output()
     for (section* sctn:sections)
     {
         section::section_hdr shdr = sctn->get_header();
+        section_headers.push_back(shdr);
         obj.write(
             reinterpret_cast<char*>(&shdr),
             sizeof(shdr)
@@ -101,9 +102,45 @@ void Assembler::generate_output()
     
     header.symbol_table_offset = obj.tellp();
     header.string_table_offset = generate_symtab_bin(obj);
-    
+    header.relocation_table_offset = obj.tellp();
 
-    // RELA MISSING
+    uint32_t current_rela_offset = 0;
+    for (size_t i = 0; i < section_headers.size(); i++)
+    {
+        section::section_hdr& shdr = section_headers[i];
+        section* sctn = sections[i];
+        
+        shdr.relocation_offset = current_rela_offset;
+        for (section::rela_entry& entry:sctn->get_rela())
+        {
+            obj.write(
+                reinterpret_cast<char*>(&entry),
+                sizeof(entry)
+            );
+            current_rela_offset += sizeof(entry);
+        }
+    }
+
+    header.data_offset = obj.tellp();
+
+    uint32_t current_data_offset = 0;
+    for (size_t i = 0; i < section_headers.size(); i++)
+    {
+        section::section_hdr& shdr = section_headers[i];
+        section* sctn = sections[i];
+        
+        shdr.data_offset = current_data_offset;
+        for (uint8_t& data_byte:sctn->get_data())
+        {
+            obj.put(data_byte);
+            current_data_offset++;
+        }
+    }
+
+    header.file_size = obj.tellp();
+
+
+    // Offset fixup
     obj.seekp(20);
     obj.write(
         reinterpret_cast<char*>(&header.symbol_table_offset),
@@ -117,6 +154,29 @@ void Assembler::generate_output()
         reinterpret_cast<char*>(&header.relocation_table_offset),
         sizeof(header.relocation_table_offset)
     );
+    obj.write(
+        reinterpret_cast<char*>(&header.data_offset),
+        sizeof(header.data_offset)
+    );
+    obj.write(
+        reinterpret_cast<char*>(&header.file_size),
+        sizeof(header.file_size)
+    );
+
+    for (size_t i = 0; i < section_headers.size(); i++)
+    {
+        section::section_hdr& shdr = section_headers[i];
+        obj.seekp(header.section_table_offset + i * sizeof(section::section_hdr) + sizeof(shdr.name) + sizeof(shdr.relocation_count) + sizeof(shdr.size));
+        obj.write(
+            reinterpret_cast<char*>(&shdr.relocation_offset),
+            sizeof(shdr.relocation_offset)
+        );
+        obj.write(
+            reinterpret_cast<char*>(&shdr.data_offset),
+            sizeof(shdr.data_offset)
+        );
+    }
+
     obj.close();
 }
 

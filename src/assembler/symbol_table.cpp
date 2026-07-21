@@ -91,11 +91,6 @@ symbol_table::symbol_table()
     symbol* sym = new symbol(current_num, 0, TYPE::NOTYP, BIND::LOC, NDX::UND, sym_name_und, true);
     sym_tab.push_back(sym);
     index_map[sym_name_und] = current_num++;
-    // TEST PLACEHOLDER
-    string deset("deset");
-    sym = new symbol(current_num, 0xA, TYPE::NOTYP, BIND::LOC, NDX::ABS, deset, true);
-    sym_tab.push_back(sym);
-    index_map[deset] = current_num++;
 }
 
 
