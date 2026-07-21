@@ -94,7 +94,7 @@ void section::print_rela()
 
 void section::print_data()
 {
-    cout << "\n." << name << ".data\n";
+    cout << "\n." << name << '\n';
     if (data.empty()) {
         cout << "(empty)\n";
         return;

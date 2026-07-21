@@ -121,57 +121,57 @@ inst_line:      label instruction
                 ;
 
 
-instruction:    INST_HALT { assembler.emit_dword(0x00000000); }
+instruction:    INST_HALT { assembler.process_halt(); }
                 |
-                INST_INT { assembler.emit_dword(0x10000000); }
+                INST_INT { assembler.process_int(); }
                 |
-                INST_IRET { assembler.emit_dword(0x960E0004); assembler.emit_dword(0x93FE0008); }
+                INST_IRET { assembler.process_iret(); }
                 |
                 INST_CALL dest_operand { assembler.process_call(); }
                 |
-                INST_RET { assembler.emit_dword(0x93FE0004); }
+                INST_RET { assembler.process_ret(); }
                 |
                 INST_JMP dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::JMP); }
                 |
-                INST_BEQ GPR COMMA GPR COMMA dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::BEQ, $2, $4); }
+                INST_BEQ GPR COMMA GPR COMMA dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::BEQ, static_cast<Assembler::OP_GPR>($2), static_cast<Assembler::OP_GPR>($4)); }
                 |
-                INST_BNE GPR COMMA GPR COMMA dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::BNE, $2, $4); }
+                INST_BNE GPR COMMA GPR COMMA dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::BNE, static_cast<Assembler::OP_GPR>($2), static_cast<Assembler::OP_GPR>($4)); }
                 |
-                INST_BGT GPR COMMA GPR COMMA dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::BGT, $2, $4); }
+                INST_BGT GPR COMMA GPR COMMA dest_operand { assembler.process_jump(Assembler::JUMP_TYPE::BGT, static_cast<Assembler::OP_GPR>($2), static_cast<Assembler::OP_GPR>($4)); }
                 |
-                INST_PUSH GPR { assembler.emit_dword(0x81E00FFC | ($2 << 12)); }
+                INST_PUSH GPR { assembler.process_push(static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_POP GPR { assembler.emit_dword(0x930E0004 | ($2 << 20)); }
+                INST_POP GPR { assembler.process_pop(static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_XCHG GPR COMMA GPR { assembler.emit_dword(0x40000000 | ($2 << 16) | ($4 << 12)); }
+                INST_XCHG GPR COMMA GPR { assembler.process_xchg(static_cast<Assembler::OP_GPR>($2), static_cast<Assembler::OP_GPR>($4)); }
                 |
-                INST_ADD GPR COMMA GPR { assembler.emit_dword(0x50000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
+                INST_ADD GPR COMMA GPR { assembler.process_arth(Assembler::ARTH_TYPE::ADD, static_cast<Assembler::OP_GPR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_SUB GPR COMMA GPR { assembler.emit_dword(0x51000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
+                INST_SUB GPR COMMA GPR { assembler.process_arth(Assembler::ARTH_TYPE::SUB, static_cast<Assembler::OP_GPR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_MUL GPR COMMA GPR { assembler.emit_dword(0x52000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
+                INST_MUL GPR COMMA GPR { assembler.process_arth(Assembler::ARTH_TYPE::MUL, static_cast<Assembler::OP_GPR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_DIV GPR COMMA GPR { assembler.emit_dword(0x53000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
+                INST_DIV GPR COMMA GPR { assembler.process_arth(Assembler::ARTH_TYPE::DIV, static_cast<Assembler::OP_GPR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_NOT GPR { assembler.emit_dword(0x60000000 | ($2 << 20) | ($2 << 16)); }
+                INST_NOT GPR { assembler.process_log(Assembler::LOG_TYPE::NOT, static_cast<Assembler::OP_GPR>($2), Assembler::OP_GPR::GPR_0); }
                 |
-                INST_AND GPR COMMA GPR { assembler.emit_dword(0x61000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
+                INST_AND GPR COMMA GPR { assembler.process_log(Assembler::LOG_TYPE::AND, static_cast<Assembler::OP_GPR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_OR GPR COMMA GPR { assembler.emit_dword(0x62000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
+                INST_OR GPR COMMA GPR { assembler.process_log(Assembler::LOG_TYPE::OR, static_cast<Assembler::OP_GPR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_XOR GPR COMMA GPR { assembler.emit_dword(0x63000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
+                INST_XOR GPR COMMA GPR { assembler.process_log(Assembler::LOG_TYPE::XOR, static_cast<Assembler::OP_GPR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_SHL GPR COMMA GPR { assembler.emit_dword(0x70000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
+                INST_SHL GPR COMMA GPR { assembler.process_sh(Assembler::SH_TYPE::LEFT_SH, static_cast<Assembler::OP_GPR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_SHR GPR COMMA GPR { assembler.emit_dword(0x71000000 | ($2 << 20) | ($2 << 16) | ($4 << 12)); }
+                INST_SHR GPR COMMA GPR { assembler.process_sh(Assembler::SH_TYPE::RIGHT_SH, static_cast<Assembler::OP_GPR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_LD { cout << "ld "; } operand COMMA GPR { cout << ", %r" << $5; }
+                INST_LD operand COMMA GPR { assembler.process_ld(static_cast<Assembler::OP_GPR>($4)); }
                 |
-                INST_ST GPR COMMA { cout << "st %r" << $2 << ", "; } operand
+                INST_ST GPR COMMA operand { assembler.process_st(static_cast<Assembler::OP_GPR>($2)); }
                 |
-                INST_CSRRD CSR COMMA GPR { assembler.emit_dword(0x90000000 | ($4 << 20) | ($2 << 16)); }
+                INST_CSRRD CSR COMMA GPR { assembler.process_csr_op(Assembler::CSR_OP_TYPE::CSR_RD, static_cast<Assembler::OP_CSR>($2), static_cast<Assembler::OP_GPR>($4)); }
                 |
-                INST_CSRWR GPR COMMA CSR { assembler.emit_dword(0x91000000 | ($4 << 20) | ($2 << 16)); }
+                INST_CSRWR GPR COMMA CSR { assembler.process_csr_op(Assembler::CSR_OP_TYPE::CSR_WR, static_cast<Assembler::OP_CSR>($4), static_cast<Assembler::OP_GPR>($2)); }
                 ;
 
 

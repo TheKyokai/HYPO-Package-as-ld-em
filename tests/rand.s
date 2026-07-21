@@ -43,20 +43,22 @@ my_start:
     push %r1
     ld $25, %r1
     push %r1
-    call mathDiv
+    call mathAdd
     st %r1, value5
 
     ld $4, %r1
     push %r1
     ld $24, %r1
     push %r1
-    call mathDiv
+    call mathSub
     st %r1, value6
 
     ld value1, %r1
     ld value2, %r2
 
     halt
+
+    ld [%r10 + 10], %r1
 
 .section my_data
 value1:
