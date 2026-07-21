@@ -35,6 +35,12 @@ void linker::link_input_obj()
         return;
     }
 
+    if (!resolve_relocation())
+    {
+        cerr << "No output files will be generated" << endl;   
+        return;
+    }
+
     symtab.print_sym_tab(cout);
 
     for (ld_section* sctn:sections)
@@ -256,7 +262,7 @@ bool linker::resolve_symbols()
     for (ld_section* section:sections)
     {
         symtab.insert_symbol(section->get_address(), ld_symbol_table::TYPE::SCTN, ld_symbol_table::BIND::LOC, section->get_name());
-        section->set_ndx(current_ndx);
+        section->set_ndx(current_ndx++);
     }
     for (ld_obj* obj:input_objs)
         if (!resolve_single_obj_symbols(obj))
@@ -302,7 +308,9 @@ bool linker::resolve_single_obj_symbols(ld_obj* obj)
         ld_section* original_section = get_section_by_name(obj->sections, section_name);
         ld_section* current_section = get_section_by_name(sections, section_name);
 
-        uint32_t value = current_section->get_address() + original_section->get_address() + sym->value;
+        uint32_t value = current_section->get_address() + sym->value;
+        if (current_section != original_section)
+            value += original_section->get_address();
         uint32_t ndx = current_section->get_ndx();
 
         ld_symbol_table::symbol* found_sym = symtab.get_symbol_by_name(sym->name);
@@ -325,12 +333,59 @@ bool linker::resolve_single_obj_symbols(ld_obj* obj)
 
 bool linker::resolve_relocation()
 {
+    for (ld_obj* obj:input_objs)
+        if (!resolve_single_obj_relocation(obj))
+            return false;
     return true;
 }
 
 bool linker::resolve_single_obj_relocation(ld_obj* obj)
 {
-    return true;
+    bool resolution_error = false;
+    for (ld_section* section:obj->sections)
+    {
+        
+        ld_section* current_section = section->get_first_section();
+        if (!current_section)
+            current_section = section;
+
+        for (ld_section::rela_entry& entry:section->get_rela())
+        {
+            if (entry.type != ld_section::RELA_TYPE::R_32 && entry.type != ld_section::RELA_TYPE::R_32L)
+            {
+                cerr << "Unknown relocation type" << endl;
+                resolution_error = true;
+                continue;
+            }
+            
+            ld_symbol_table::symbol* old_symbol = obj->symtab.get_symbols()[entry.symbol];
+            ld_symbol_table::symbol* symbol = symtab.get_symbol_by_name(old_symbol->name);
+            uint32_t ndx = symtab.get_symbol_num(symbol->name);
+            uint32_t old_offs = entry.offset;
+            uint32_t addend_val = entry.addend;
+
+            if (section == current_section)
+            {
+                entry.offset += current_section->get_address();
+                entry.symbol = ndx;    
+            }
+            else
+            {
+                uint32_t new_offs = entry.offset + current_section->get_address() + section->get_address();
+                old_offs += section->get_address();
+                if (entry.type == ld_section::RELA_TYPE::R_32L)
+                    addend_val += section->get_address();
+                current_section->insert_rela_entry(new_offs, entry.type, ndx, addend_val);
+            }
+
+            uint32_t val = symbol->value + addend_val;
+            current_section->get_data()[old_offs] = val & 0xFF;
+            current_section->get_data()[old_offs + 1] = (val >> 8) & 0xFF;
+            current_section->get_data()[old_offs + 2] = (val >> 16) & 0xFF;
+            current_section->get_data()[old_offs + 3] = (val >> 24) & 0xFF;
+        }
+    }
+    return !resolution_error;
 }
 
 ld_section* linker::get_section_by_name(vector<ld_section*>& sections, string& section_name)

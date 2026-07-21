@@ -90,6 +90,8 @@ void section::print_rela(ostream& os)
 
         if (entry.type == RELA_TYPE::R_32)
             entry_type = "R_32";
+        else if(entry.type == RELA_TYPE::R_32L)
+            entry_type = "R_32L";
 
         os << left;
 

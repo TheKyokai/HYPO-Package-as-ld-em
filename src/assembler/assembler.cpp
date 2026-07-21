@@ -1026,14 +1026,17 @@ void Assembler::rela_fixup()
             symbol_table::symbol* sym = symtab.get_symbols()[entry.symbol];
             if (sym->ndx == symbol_table::NDX::ABS)
             {
+                // Marking ABS for removal
                 entry.symbol = sym->ndx;
                 continue;
             }
             // Already adjusted for global symbols
             if (sym->bind == symbol_table::BIND::GLOB)
                 continue;
+            // Local symbol relocation must point to its section
             entry.symbol = sym->ndx;
             entry.addend = sym->value;
+            entry.type = section::RELA_TYPE::R_32L; // Linker adjusts the addend when relocating section
         }
         vector<section::rela_entry>& rela = sctn->get_rela();
         rela.erase(remove_if(rela.begin(), rela.end(), [](section::rela_entry entry) {return entry.symbol == symbol_table::NDX::ABS;}), rela.end());

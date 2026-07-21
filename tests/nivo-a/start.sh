@@ -1,3 +1,5 @@
+#!/bin/bash
+
 ASSEMBLER=assembler
 LINKER=linker
 EMULATOR=emulator

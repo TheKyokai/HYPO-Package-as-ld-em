@@ -15,7 +15,8 @@ public:
 
     enum RELA_TYPE
     {
-        R_32
+        R_32,
+        R_32L
     };
 
     struct rela_entry

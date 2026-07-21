@@ -92,7 +92,10 @@ $(BUILD_DIR):
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR) $(FLEX_SRC) $(BISON_SRC) $(BISON_HDR) $(BISON_LOC_HDR)
 
+clean_out:
+	rm -f out/*
+
 
 -include $(DEPS)
 
-.PHONY: all generate_lexer_and_parser clean
+.PHONY: all generate_lexer_and_parser clean clean_out
