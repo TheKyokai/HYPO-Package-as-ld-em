@@ -93,7 +93,7 @@ directive:      ASMD_GLOBAL { assembler.set_cpdir(Assembler::DIR::GLOBAL); } sym
                 |
                 ASMD_ASCII STR_LITERAL[str_lit] { assembler.emit_string($str_lit); }
                 |
-                ASMD_EQU SYMBOL[new_symbol] COMMA NUM_LITERAL[val] { cout << ".equ " << $new_symbol << ", " << $val << '\n'; }
+                ASMD_EQU SYMBOL[new_symbol] COMMA NUM_LITERAL[val]
                 ;
 
 

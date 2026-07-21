@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <iomanip>
+#include <cstring>
 
 
 int section::insert_rela_entry(uint32_t offset, RELA_TYPE type, uint32_t symbol, uint32_t addend)
@@ -67,44 +68,65 @@ uint32_t section::get_ndx()
 }
 
 
-void section::print_rela()
+void section::print_rela(ostream& os)
 {
-    //TODO Change the type label -> number for now
-    cout << "\n.rela." << name << '\n';
+    os << "\n.rela." << name << '\n';
+
     if (rela.empty()) {
-        cout << "(empty)\n";
+        os << "(empty)\n";
         return;
     }
 
-    cout << left
-         << setw(10) << "Offset"
-         << setw(15) << "Type"
-         << setw(10) << "Symbol"
-         << "Addend\n";
+    os << string(50, '-') << endl;
+
+    os << left
+       << setw(13) << "Offset"
+       << setw(15) << "Type"
+       << setw(10) << "Symbol"
+       << "Addend\n";
 
     for (const auto& entry : rela) {
-        cout << left
-             << setw(10) << entry.offset
-             << setw(15) << entry.type
-             << setw(10) << entry.symbol
-             << entry.addend << '\n';
+        string entry_type;
+
+        if (entry.type == RELA_TYPE::R_32)
+            entry_type = "R_32";
+
+        os << left;
+
+        os << "0x"
+           << uppercase << hex
+           << setw(8) << setfill('0') << right
+           << entry.offset;
+
+        os << setfill(' ') << dec << nouppercase << left
+           << setw(3) << "";
+
+        os << setw(15) << entry_type
+           << setw(10) << entry.symbol;
+
+        os << "0x"
+           << uppercase << hex
+           << setw(8) << setfill('0') << right
+           << entry.addend
+           << '\n';
+
+        os << setfill(' ') << dec << nouppercase;
     }
 }
 
 
-void section::print_data()
+void section::print_data(ostream& os)
 {
-    cout << "\n." << name << '\n';
     if (data.empty()) {
-        cout << "(empty)\n";
+        os << "(empty)\n";
         return;
     }
 
     for (size_t i = 0; i < data.size(); ++i) {
         if (i % 16 == 0)
-            cout << setw(4) << setfill('0') << hex << i << ": ";
+            os << setw(4) << setfill('0') << hex << i << ": ";
 
-        cout << right
+        os << right
              << setw(2)
              << setfill('0')
              << hex
@@ -112,17 +134,43 @@ void section::print_data()
              << (unsigned)(data[i]) << ' ';
 
         if ((i + 1) % 16 == 0 || i + 1 == data.size())
-            cout << '\n';
+            os << '\n';
     }
 
-    cout << dec << nouppercase << setfill(' ');
+    os << dec << nouppercase << setfill(' ');
 }
 
 
-void section::print_section()
+void section::print_section(ostream& os)
 {
-    cout << ".section." << name << '\n';
-    print_data();
-    print_rela();
-    cout << '\n' << endl;
+    os << ".section." << name << '\n';
+    print_data(os);
+    print_rela(os);
+    os << '\n' << endl;
 }
+
+
+section::section_hdr section::get_header()
+{
+    section_hdr header;
+    strncpy(header.name, name.c_str(), sizeof(header.name) - 1);
+    header.name[sizeof(header.name) - 1] = '\0';
+
+    header.size = data.size();
+    header.relocation_count = rela.size();
+
+    header.data_offset = 0;
+    header.relocation_offset = 0; 
+    return header;
+}
+
+void section::print_binary_rela(ostream& os)
+{
+
+}
+
+void section::print_binary_data(ostream& os)
+{
+
+}
+

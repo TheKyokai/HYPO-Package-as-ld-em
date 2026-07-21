@@ -71,7 +71,21 @@ public:
     symbol_table();
     ~symbol_table();
 
-    void print_sym_tab();
+    void print_sym_tab(ostream& os);
+    
+    struct symbol_hdr
+    {
+        uint32_t name_offset; 
+
+        uint32_t value;
+        uint32_t size;
+
+        uint32_t ndx;      
+
+        uint8_t type;
+        uint8_t bind;
+        uint16_t alignment_padding = 0x0000;
+    };
 
 
 private:

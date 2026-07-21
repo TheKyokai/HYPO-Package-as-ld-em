@@ -91,6 +91,11 @@ symbol_table::symbol_table()
     symbol* sym = new symbol(current_num, 0, TYPE::NOTYP, BIND::LOC, NDX::UND, sym_name_und, true);
     sym_tab.push_back(sym);
     index_map[sym_name_und] = current_num++;
+    // TEST PLACEHOLDER
+    string deset("deset");
+    sym = new symbol(current_num, 0xA, TYPE::NOTYP, BIND::LOC, NDX::ABS, deset, true);
+    sym_tab.push_back(sym);
+    index_map[deset] = current_num++;
 }
 
 
@@ -109,11 +114,11 @@ symbol_table::~symbol_table()
 }
 
 
-void symbol_table::print_sym_tab()
+void symbol_table::print_sym_tab(ostream& os)
 {
-    cout << ".symtab\n\n";
+    os << ".symtab\n\n";
 
-    cout << left
+    os << left
               << setw(5)  << "Num"
               << setw(12) << "Value"
               << setw(8)  << "Size"
@@ -124,7 +129,7 @@ void symbol_table::print_sym_tab()
               << "Name"
               << endl;
 
-    cout << string(72, '-') << endl;
+    os << string(72, '-') << endl;
 
     for (symbol* sym : sym_tab)
     {
@@ -164,17 +169,26 @@ void symbol_table::print_sym_tab()
             break;
         }
 
-        cout << left
-                  << setw(5)  << sym->num
-                  << setw(12) << sym->value
-                  << setw(8)  << sym->size
-                  << setw(10) << type
-                  << setw(10) << bind
-                  << setw(8)  << ndx
-                  << setw(10)  << sym->defined
-                  << sym->name
-                  << endl;
+        os << left
+             << setw(5) << sym->num;
+
+        os << "0x"
+             << uppercase << hex
+             << setw(8) << setfill('0') << right << sym->value;
+
+        os << dec << nouppercase << setfill(' ') << left;
+
+        os << "  "
+             << setw(8)  << sym->size
+             << setw(10) << type
+             << setw(10) << bind
+             << setw(8)  << ndx
+             << setw(10) << (sym->defined ? "YES" : "NO")
+             << sym->name
+             << '\n';
     }
 
-    cout << endl;
+    os << endl;
 }
+
+

@@ -52,6 +52,7 @@ int main(int argc, char* argv[])
 
     string src_file(input_file);
     string obj_file;
+    string out_file;
 
     if (output_file == nullptr)
     {
@@ -63,11 +64,15 @@ int main(int argc, char* argv[])
     }
     else
         obj_file = output_file;
-
-    cout << "Input: " << src_file << endl;
-    cout << "Output: " << obj_file << endl;
-
-    Assembler assembler(src_file, obj_file);
+    
+    size_t dot_index = obj_file.find_last_of('.');
+    if (dot_index == string::npos)
+        out_file = obj_file + ".out";
+    else
+        out_file = obj_file.substr(0, dot_index) + ".out";
+    
+    
+    Assembler assembler(src_file, obj_file, out_file);
 
     assembler.process_source();
 

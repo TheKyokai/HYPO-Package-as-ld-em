@@ -58,7 +58,7 @@ my_start:
 
     halt
 
-    ld [%r10 + 10], %r1
+    ld [%r10 + deset], %r1
 
 .section my_data
 value1:

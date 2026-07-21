@@ -130,9 +130,11 @@ public:
         CSR_WR
     };
 
-    Assembler(string& src_file, string& obj_file):src_filename(src_file), obj_filename(obj_file) {}
+    Assembler(string& src_file, string& obj_file, string& out_file):src_filename(src_file), obj_filename(obj_file), out_filename(out_file) {}
 
     void process_source();
+
+    void generate_output();
 
     void start_new_section(string sctn_name);
 
@@ -212,14 +214,46 @@ private:
     uint32_t lit_pool_use_start = 0;
     vector<lit_pool_usage_entry*>* lit_pool_usages = nullptr;
 
+    struct disp_ref
+    {
+        symbol_table::symbol* sym;
+        uint32_t patch_addr;
+        string sctn_name;
+
+        disp_ref(symbol_table::symbol* sym, uint32_t patch_addr, string& sctn_name):sym(sym), patch_addr(patch_addr), sctn_name(sctn_name) {}
+    };
+
+    vector<disp_ref*> disp_refs;
+
     void forward_reference_fixup();
     void rela_fixup();
 
     bool undefined_symbols = false;
     bool error_detected = false;
 
+    struct bin_hdr
+    {
+        uint32_t magic = 0x41534D4F; // ASMO
+
+        uint32_t section_count;
+        uint32_t symbol_count;
+        uint32_t relocation_count;
+
+        uint32_t section_table_offset = sizeof(bin_hdr);
+        uint32_t symbol_table_offset;
+        uint32_t string_table_offset;
+        uint32_t relocation_table_offset;
+
+
+        uint32_t file_size;
+    };
+
+    uint32_t generate_symtab_bin(ostream& obj);
+    
+
     string src_filename;
     string obj_filename;
+    string out_filename;
     
     symbol_table symtab;
 

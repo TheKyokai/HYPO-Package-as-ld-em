@@ -15,8 +15,7 @@ public:
 
     enum RELA_TYPE
     {
-        R_32,
-        R_PC32
+        R_32
     };
 
     struct rela_entry
@@ -43,10 +42,24 @@ public:
     
     uint32_t get_ndx();
 
-    void print_rela();
-    void print_data();
+    void print_rela(ostream& os);
+    void print_data(ostream& os);
+    void print_section(ostream& os);
 
-    void print_section();
+    struct section_hdr
+    {
+        char name[32];
+
+        uint32_t size;
+        uint32_t data_offset;       
+
+        uint32_t relocation_count;
+        uint32_t relocation_offset; 
+    };
+
+    section_hdr get_header();
+    void print_binary_rela(ostream& os);
+    void print_binary_data(ostream& os);
 
 private:
     uint32_t location_counter = 0;
@@ -55,6 +68,8 @@ private:
     vector<rela_entry> rela;
 
     uint32_t ndx;
+
+    
 };
 
 

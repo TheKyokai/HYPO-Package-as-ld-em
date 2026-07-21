@@ -1,6 +1,7 @@
 #include <assembler/assembler.hpp>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 
 using namespace std;
 
@@ -34,14 +35,124 @@ void Assembler::process_source()
     forward_reference_fixup();
     rela_fixup();
 
-    
-    cout << "\n\n------ASM DUMP------\n\n";
-
-    symtab.print_sym_tab();
-    for (section* sec: sections)
-        sec->print_section();
-
+    generate_output();
 }
+
+void Assembler::generate_output()
+{
+    if (error_detected || undefined_symbols)
+    {
+        cerr << "Error detected - No output will be generated" << endl;
+        return;   
+    }
+
+    // Generate text out_file
+
+    ofstream out(out_filename);
+
+    if (!out)
+    {
+        cerr << "Unable to open " << out_filename << '\n';
+        return;
+    }
+
+    symtab.print_sym_tab(out);
+
+    for (section* sctn : sections)
+        sctn->print_section(out);
+
+    out.close();
+
+    // Generate bin obj_file 
+
+    ofstream obj(obj_filename, ios::binary);
+
+    if (!obj)
+    {
+        cerr << "Cannot open object file\n";
+        return;
+    }
+
+    bin_hdr header;
+    header.section_count = sections.size();
+    header.symbol_count = symtab.get_symbols().size();
+    header.relocation_count = 0;
+    for (section* sctn:sections)
+    {
+        header.relocation_count += sctn->get_rela().size();
+    }
+
+    header.file_size = -1;
+
+    obj.write(
+        reinterpret_cast<char*>(&header),
+        sizeof(header)
+    );
+
+    vector<section::section_hdr> section_headers;
+    for (section* sctn:sections)
+    {
+        section::section_hdr shdr = sctn->get_header();
+        obj.write(
+            reinterpret_cast<char*>(&shdr),
+            sizeof(shdr)
+        );
+    }
+    
+    header.symbol_table_offset = obj.tellp();
+    header.string_table_offset = generate_symtab_bin(obj);
+    
+
+    // RELA MISSING
+    obj.seekp(20);
+    obj.write(
+        reinterpret_cast<char*>(&header.symbol_table_offset),
+        sizeof(header.symbol_table_offset)
+    );
+    obj.write(
+        reinterpret_cast<char*>(&header.string_table_offset),
+        sizeof(header.string_table_offset)
+    );
+    obj.write(
+        reinterpret_cast<char*>(&header.relocation_table_offset),
+        sizeof(header.relocation_table_offset)
+    );
+    obj.close();
+}
+
+
+uint32_t Assembler::generate_symtab_bin(ostream& obj)
+{
+    vector<char> string_table;
+    for (symbol_table::symbol* sym:symtab.get_symbols())
+    {
+        symbol_table::symbol_hdr symhdr;
+        symhdr.name_offset = string_table.size();
+        for (char& c:sym->name)
+            string_table.push_back(c);
+        string_table.push_back('\0');
+
+        symhdr.value = sym->value;
+        symhdr.size = sym->size;
+        symhdr.ndx = sym->ndx;
+        symhdr.type = static_cast<uint8_t>(sym->type);
+        symhdr.bind = static_cast<uint8_t>(sym->bind);
+
+        obj.write(
+            reinterpret_cast<char*>(&symhdr),
+            sizeof(symhdr)
+        );
+    }
+
+    uint32_t string_table_offset = obj.tellp();
+
+
+    for (char& c:string_table)
+        obj.put(c);
+    
+    return string_table_offset;
+}
+
 
 
 // Symbol declaration/definition
@@ -463,8 +574,6 @@ void Assembler::prepare_operand(OPERAND_TYPE type, uint32_t lit, string sym_name
         operand_sym = get_symbol_for_usage(sym_name);
     else 
         operand_sym = nullptr;
-
-    //cout << "\n OPERAND: " << type << ' ' << lit << ' ' << operand_sym->name << ' ' << gpr << '\n';
 }
 
 void Assembler::clear_prepared_operand()
@@ -618,7 +727,27 @@ void Assembler::process_ld(OP_GPR gpr)
         }
         case GPR_SYM_DISP:
         {
-            //TODO Another type of list required for sym val disp -> flink should solve with another field
+            ensure_literal_pool(4);
+            if (operand_sym->defined)
+                if (operand_sym->ndx == symbol_table::NDX::ABS)
+                {
+                    if (operand_sym->value > 0xFFF)
+                    {
+                        cerr << "Value of symbol '" << operand_sym->name << "' too large for [<reg> + <symbol>]" << endl;
+                        break;
+                    }
+
+                    emit_op(OP_CODE::OP_LD, OP_MOD::MOD_2, gpr, static_cast<OP_GPR>(operand_gpr), OP_GPR::GPR_0, operand_sym->value);
+                    break;
+                }
+                else
+                {
+                    cerr << "Value of symbol '" << operand_sym->name << "' will not be known during assembly" << endl;
+                    break;
+                }
+            else
+                disp_refs.push_back(new disp_ref(operand_sym, current_section->get_location_ctr(), current_section->get_name()));
+                emit_op(OP_CODE::OP_LD, OP_MOD::MOD_2, gpr, static_cast<OP_GPR>(operand_gpr), OP_GPR::GPR_0, 0x000);
             break;
         }
     default:
@@ -674,12 +803,31 @@ void Assembler::process_st(OP_GPR gpr)
                 cerr << "Literal displacement too large for st instruction" << endl;
                 break;
             }
-            emit_op(OP_CODE::OP_LD, OP_MOD::MOD_2, OP_GPR::GPR_0, static_cast<OP_GPR>(operand_gpr), gpr, operand_lit);
+            emit_op(OP_CODE::OP_ST, OP_MOD::MOD_2, OP_GPR::GPR_0, static_cast<OP_GPR>(operand_gpr), gpr, operand_lit);
             break;
         }
         case GPR_SYM_DISP:
         {
-            //TODO Another type of list required for sym val disp -> flink should solve with another field
+            ensure_literal_pool(4);
+            if (operand_sym->defined)
+                if (operand_sym->ndx == symbol_table::NDX::ABS)
+                {
+                    if (operand_sym->value > 0xFFF)
+                    {
+                        cerr << "Value of symbol '" << operand_sym->name << "' too large for [<reg> + <symbol>]" << endl;
+                        break;
+                    }
+                    emit_op(OP_CODE::OP_ST, OP_MOD::MOD_2, OP_GPR::GPR_0, static_cast<OP_GPR>(operand_gpr), gpr, operand_sym->value);
+                    break;
+                }
+                else
+                {
+                    cerr << "Value of symbol '" << operand_sym->name << "' will not be known during assembly" << endl;
+                    break;
+                }
+            else
+                disp_refs.push_back(new disp_ref(operand_sym, current_section->get_location_ctr(), current_section->get_name()));
+                emit_op(OP_CODE::OP_ST, OP_MOD::MOD_2, OP_GPR::GPR_0, static_cast<OP_GPR>(operand_gpr), gpr, 0x000);
             break;
         }
     default:
@@ -712,7 +860,7 @@ void Assembler::ensure_literal_pool(uint32_t byte_cnt, bool end)
         if (entry->sym)
         {
             if (!entry->sym->defined)
-                symtab.insert_forward_reference_entry(entry->sym->name, current_section->get_name(), current_section->get_location_ctr());
+                symtab.insert_forward_reference_entry(entry->sym->name, current_section->get_name(), current_section->get_location_ctr());    
             current_section->insert_rela_entry(current_section->get_location_ctr(), section::RELA_TYPE::R_32, symtab.get_symbol_num(entry->sym->name), 0);    
             emit_dword(entry->sym->value);
         }
@@ -759,6 +907,28 @@ void Assembler::forward_reference_fixup()
     if (error_detected)
         return;
     
+    for (disp_ref* ref:disp_refs)
+    {
+        if (!ref->sym->defined)
+            continue;
+        if (ref->sym->ndx != symbol_table::NDX::ABS)
+        {
+            cerr << "Value of symbol '" << ref->sym->name << "' will not be known during assembly" << endl;
+            continue;
+        }
+        if (ref->sym->value > 0xFFF)
+        {
+            cerr << "Value of symbol '" << ref->sym->name << "' too large for [<reg> + <symbol>] - " << ref->sym->value << endl;
+            continue;
+        }
+        section* sctn = sections[sctn_name_map[ref->sctn_name]];
+        vector<uint8_t>& data = sctn->get_data();
+        uint32_t val = ref->sym->value;
+        data[ref->patch_addr] = val & 0xFF;
+        data[ref->patch_addr + 1] |= ((val >> 8) & 0x0F);
+    }
+    
+    
     vector<symbol_table::symbol*>& symbols = symtab.get_symbols();
     for (symbol_table::symbol* sym:symbols)
     {
@@ -775,10 +945,11 @@ void Assembler::forward_reference_fixup()
             section* sctn = sections[sctn_name_map[entry->sctn]];
             vector<uint8_t>& data = sctn->get_data();
             uint32_t val = sym->value;
+            cout << sym->name << endl;
             data[entry->patch_addr] = val & 0xFF;
-            data[entry->patch_addr + 1] = (val >> 4) & 0xFF;
-            data[entry->patch_addr + 2] = (val >> 8) & 0xFF;
-            data[entry->patch_addr + 3] = (val >> 12) & 0xFF;
+            data[entry->patch_addr + 1] = (val >> 8) & 0xFF;
+            data[entry->patch_addr + 2] = (val >> 16) & 0xFF;
+            data[entry->patch_addr + 3] = (val >> 24) & 0xFF;
         }
     }
 }
@@ -789,13 +960,22 @@ void Assembler::rela_fixup()
         return;
 
     for (section* sctn:sections)
+    {   
         for (section::rela_entry& entry:sctn->get_rela())
         {
             symbol_table::symbol* sym = symtab.get_symbols()[entry.symbol];
+            if (sym->ndx == symbol_table::NDX::ABS)
+            {
+                entry.symbol = sym->ndx;
+                continue;
+            }
             // Already adjusted for global symbols
             if (sym->bind == symbol_table::BIND::GLOB)
                 continue;
             entry.symbol = sym->ndx;
             entry.addend = sym->value;
         }
+        vector<section::rela_entry>& rela = sctn->get_rela();
+        rela.erase(remove_if(rela.begin(), rela.end(), [](section::rela_entry entry) {return entry.symbol == symbol_table::NDX::ABS;}), rela.end());
+    }
 }  
