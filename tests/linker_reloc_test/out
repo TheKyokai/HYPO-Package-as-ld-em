@@ -24,3 +24,5 @@ Offset       Type           Symbol    Addend
 0x00000024   R_32L          1         0x00000020
 
 
+Undefined symbol ''
+No output files will be generated

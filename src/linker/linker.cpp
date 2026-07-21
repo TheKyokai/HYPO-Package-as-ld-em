@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 #include <algorithm>
 
 linker::~linker()
@@ -45,6 +46,11 @@ void linker::link_input_obj()
 
     for (ld_section* sctn:sections)
         sctn->print_section(cout);
+    
+    if (options.hex)
+        generate_hex();
+    else
+        generate_relocatable();
 
 }
 
@@ -398,4 +404,134 @@ ld_section* linker::get_section_by_name(vector<ld_section*>& sections, string& s
             break;
         }
     return section;
+}
+
+
+void linker::generate_hex()
+{
+    bool first = true, undefined_sym = false;
+    for (ld_symbol_table::symbol* symbol:symtab.get_symbols())
+    {
+        if (first)
+        {
+            first = false;
+            continue;
+        }
+        if (symbol->ndx == ld_symbol_table::NDX::UND)
+        {
+            cerr << "Undefined symbol '" << symbol->name << "'\n";
+            undefined_sym = true;
+        }
+    }
+    if (undefined_sym)
+    {
+        cerr << "No output files will be generated" << endl;   
+        return;
+    }
+
+    string text_out;
+    size_t dot_index = options.output_file.find_last_of('.');
+    if (dot_index == string::npos)
+        text_out = options.output_file + ".out";
+    else
+        text_out = options.output_file.substr(0, dot_index) + ".out";
+
+    ofstream out(text_out);
+
+    if (!out)
+    {
+        cerr << "Cannot open output file\n";
+        return;
+    }
+
+    vector<ld_section*> sorted_sections = sections;
+
+    sort(
+        sorted_sections.begin(),
+        sorted_sections.end(),
+        [](ld_section* a, ld_section* b) { return a->get_address() < b->get_address(); }
+    );
+
+
+    for (ld_section* section : sorted_sections)
+    {
+        uint32_t address = section->get_address();
+        vector<uint8_t>& data = section->get_data();
+
+        for (size_t i = 0; i < data.size(); i += 8)
+        {
+            out << "0x"
+                << uppercase
+                << hex
+                << setw(8)
+                << setfill('0')
+                << right
+                << address + i
+                << ": ";
+
+            for (size_t j = 0; j < 8; j++)
+            {
+                if (i + j < data.size())
+                {
+                    out << setw(2)
+                        << static_cast<int>(data[i + j]);
+                }
+                else
+                {
+                    out << "00";
+                }
+
+                if (j != 7)
+                    out << " ";
+            }
+
+            out << '\n' << left;
+        }
+    }
+
+
+    ofstream hex_out(options.output_file, ios::binary);
+
+    if (!hex_out)
+    {
+        cerr << "Cannot open output file\n";
+        return;
+    }
+
+    uint32_t magic_num = 0x4D454D45;
+
+    hex_out.write(
+        reinterpret_cast<char*>(&magic_num),
+        sizeof(magic_num)
+    );
+
+    for (ld_section* section : sorted_sections)
+    {
+        uint32_t address = section->get_address();
+        vector<uint8_t>& data = section->get_data();
+
+        for (size_t i = 0; i < data.size(); i += 8, address += 8)
+        {
+            hex_out.write(
+                reinterpret_cast<char*>(&address),
+                sizeof(address)
+            );
+
+            for (size_t j = 0; j < 8; j++)
+            {
+                if (i + j >= data.size())
+                    hex_out.put(0x00);
+                else
+                    hex_out.put(data[i + j]);
+            }
+        }
+    }
+
+    hex_out.close();
+
+}
+
+void linker::generate_relocatable()
+{
+    //TODO Copy tomorrow from assembler
 }

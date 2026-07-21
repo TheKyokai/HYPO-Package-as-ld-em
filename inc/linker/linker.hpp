@@ -68,6 +68,9 @@ private:
     bool resolve_relocation();
     bool resolve_single_obj_relocation(ld_obj* obj);
 
+    void generate_hex();
+    void generate_relocatable();
+
     ld_section* get_section_by_name(vector<ld_section*>& sections, string& section_name);
 };
 
