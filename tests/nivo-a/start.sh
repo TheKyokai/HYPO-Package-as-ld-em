@@ -1,8 +1,8 @@
 #!/bin/bash
 
-ASSEMBLER=assembler
-LINKER=linker
-EMULATOR=emulator
+ASSEMBLER=./bin/assembler
+LINKER=./bin/linker
+EMULATOR=./bin/emulator
 
 ${ASSEMBLER} -o out/main.o tests/nivo-a/main.s
 ${ASSEMBLER} -o out/math.o tests/nivo-a/math.s

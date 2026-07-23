@@ -185,6 +185,10 @@ bool linker::read_obj_file(string obj_file)
     }
 
     input_objs.push_back(input);
+
+    // input->symtab.print_sym_tab(cout);
+    // for (ld_section* sctn:input->sections)
+    //     sctn->print_section(cout);
     return true;
 }
 
@@ -385,11 +389,14 @@ bool linker::resolve_single_obj_relocation(ld_obj* obj)
                 current_section->insert_rela_entry(new_offs, entry.type, ndx, addend_val);
             }
 
-            uint32_t val = symbol->value + addend_val;
-            current_section->get_data()[old_offs] = val & 0xFF;
-            current_section->get_data()[old_offs + 1] = (val >> 8) & 0xFF;
-            current_section->get_data()[old_offs + 2] = (val >> 16) & 0xFF;
-            current_section->get_data()[old_offs + 3] = (val >> 24) & 0xFF;
+            if (options.hex)
+            {
+                uint32_t val = symbol->value + addend_val;
+                current_section->get_data()[old_offs] = val & 0xFF;
+                current_section->get_data()[old_offs + 1] = (val >> 8) & 0xFF;
+                current_section->get_data()[old_offs + 2] = (val >> 16) & 0xFF;
+                current_section->get_data()[old_offs + 3] = (val >> 24) & 0xFF;
+            }
         }
     }
     return !resolution_error;
@@ -594,6 +601,7 @@ void linker::generate_relocatable()
     header.section_count = sections.size();
     header.symbol_count = symtab.get_symbols().size();
     header.relocation_count = 0;
+    header.section_table_offset = sizeof(bin_hdr);
     for (ld_section* sctn:sections)
     {
         header.relocation_count += sctn->get_rela().size();
@@ -601,10 +609,15 @@ void linker::generate_relocatable()
 
     header.file_size = -1;
 
+    // cout << "SCTN_CNT: " << header.section_count << '\n';
+    // cout << "SYM_CNT: " << header.symbol_count << '\n';
+    // cout << "RELA_CNT: " << header.relocation_count << '\n';
+
     obj.write(
         reinterpret_cast<char*>(&header),
         sizeof(header)
     );
+
 
     vector<ld_section::section_hdr> section_headers;
     for (ld_section* sctn:sections)
@@ -616,6 +629,14 @@ void linker::generate_relocatable()
             sizeof(shdr)
         );
     }
+    
+    // for (ld_section::section_hdr& shdr:section_headers)
+    // {
+    //     cout << "SCTN: " << shdr.name << '\n';
+    //     cout << "   size: " << hex <<  shdr.size << '\n';
+    //     cout << "   rela: " << shdr.relocation_count << '\n';
+    // }
+    
     
     header.symbol_table_offset = obj.tellp();
     header.string_table_offset = generate_symtab_bin(obj);
@@ -638,6 +659,7 @@ void linker::generate_relocatable()
         }
     }
 
+
     header.data_offset = obj.tellp();
 
     uint32_t current_data_offset = 0;
@@ -656,7 +678,7 @@ void linker::generate_relocatable()
 
     header.file_size = obj.tellp();
 
-
+    
     // Offset fixup
     obj.seekp(20);
     obj.write(
@@ -699,6 +721,7 @@ void linker::generate_relocatable()
 
 uint32_t linker::generate_symtab_bin(ostream& obj)
 {
+    // cout << hex << obj.tellp() << endl;
     vector<char> string_table;
     for (ld_symbol_table::symbol* sym:symtab.get_symbols())
     {
@@ -718,6 +741,15 @@ uint32_t linker::generate_symtab_bin(ostream& obj)
             reinterpret_cast<char*>(&symhdr),
             sizeof(symhdr)
         );
+
+        // cout << "SYM_HDR: " << sym->name << "\n";
+        // cout << "   name_offset: " << hex << symhdr.name_offset << '\n';
+        // cout << "   value: " << hex << symhdr.value << '\n';
+        // cout << "   size: " << hex << symhdr.size << '\n';
+        // cout << "   ndx: " << symhdr.ndx << '\n';
+        // cout << "   type: " << hex << static_cast<int>(symhdr.type) << '\n';
+        // cout << "   bind: " << hex << static_cast<int>(symhdr.bind) << '\n';
+        // cout << "   padd: " << hex << static_cast<int>(symhdr.alignment_padding) << '\n';
     }
 
     uint32_t string_table_offset = obj.tellp();

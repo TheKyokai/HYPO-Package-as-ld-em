@@ -281,11 +281,11 @@ void Assembler::process_symbol(string sym)
         symbol_table::symbol* symbol = symtab.get_symbol_by_name(sym);
         if (symbol == nullptr)
             // global symbol declaration
-            symtab.insert_symbol(0, symbol_table::TYPE::NOTYP, symbol_table::BIND::GLOB, sym, symbol_table::NDX::UND, false);
+            symtab.insert_symbol(0, symbol_table::TYPE::NOTYP, symbol_table::BIND::GLOB, sym, symbol_table::NDX::UND, true);
         else
-            if (symbol->bind == symbol_table::BIND::GLOB && symbol->ndx == symbol_table::NDX::UND && symbol->defined)
-                cerr << "Declaring external symbol '" << sym << "' global" << endl;
-            else
+            // if (symbol->bind == symbol_table::BIND::GLOB && symbol->ndx == symbol_table::NDX::UND && symbol->defined)
+                // cerr << "Declaring external symbol '" << sym << "' global" << endl;
+            // else
             {
                 // declaring an existing symbol global -> multiple global declarations valid
                 symbol->bind = symbol_table::BIND::GLOB;
@@ -317,11 +317,11 @@ void Assembler::process_symbol(string sym)
         {
             if (symbol->defined)
             {
-                if (symbol->ndx == symbol_table::NDX::UND)
-                {
-                    cerr << "Defining '" << sym << "' when it has been declared external" << endl;
-                    return;
-                }
+                // if (symbol->ndx == symbol_table::NDX::UND)
+                // {
+                //     cerr << "Defining '" << sym << "' when it has been declared external" << endl;
+                //     return;
+                // }
                 if (symbol->ndx != symbol_table::NDX::UND)
                 {    
                     cerr << "Redefinition of already existing symbol '" << sym << "'" << endl;
@@ -358,9 +358,10 @@ symbol_table::symbol* Assembler::get_symbol_for_usage(string& sym_name)
 void Assembler::begin_equ(string sym_name)
 {
     symbol_table::symbol* sym = symtab.get_symbol_by_name(sym_name);
-    if (sym && sym->defined)
+    if (sym && sym->ndx != symbol_table::NDX::UND)
     {
         cerr << "Symbol '" << sym_name << "' defined multiple times" << endl;
+        error_detected = true;
         return;
     }
     if (!sym)
@@ -432,9 +433,6 @@ Assembler::equ_expr* Assembler::make_neg(equ_expr* child)
 
 
 
-
-
-
 // .word
 void Assembler::emit_symbol(string sym_name)
 {
@@ -448,7 +446,7 @@ void Assembler::emit_symbol(string sym_name)
     ensure_literal_pool(4);
 
     symbol_table::symbol* sym = get_symbol_for_usage(sym_name);
-    if (!sym->defined)
+    if (sym->ndx == symbol_table::NDX::UND)
         symtab.insert_forward_reference_entry(sym_name, current_section->get_name(), current_section->get_location_ctr());
     
     // No relocation entry needed for ABS symbols
@@ -1004,7 +1002,7 @@ void Assembler::ensure_literal_pool(uint32_t byte_cnt, bool end)
     {
         if (entry->sym)
         {
-            if (!entry->sym->defined)
+            if (entry->sym->ndx == symbol_table::NDX::UND)
                 symtab.insert_forward_reference_entry(entry->sym->name, current_section->get_name(), current_section->get_location_ctr());    
             current_section->insert_rela_entry(current_section->get_location_ctr(), section::RELA_TYPE::R_32, symtab.get_symbol_num(entry->sym->name), 0);    
             emit_dword(entry->sym->value);
@@ -1054,7 +1052,7 @@ void Assembler::forward_reference_fixup()
     
     for (disp_ref* ref:disp_refs)
     {
-        if (!ref->sym->defined)
+        if (ref->sym->ndx == symbol_table::NDX::UND)
             continue;
         if (ref->sym->ndx != symbol_table::NDX::ABS)
         {
@@ -1073,10 +1071,11 @@ void Assembler::forward_reference_fixup()
         data[ref->patch_addr + 1] |= ((val >> 8) & 0x0F);
     }
     
-    
+    // cout << "FR FIXUP\n";
     vector<symbol_table::symbol*>& symbols = symtab.get_symbols();
     for (symbol_table::symbol* sym:symbols)
     {
+        // cout << "SYM: " << sym->name << '\n';
         if (!sym->defined)
         {
             undefined_symbols = true;
@@ -1087,6 +1086,7 @@ void Assembler::forward_reference_fixup()
             continue;
         for (symbol_table::symbol::forward_reference_entry* entry:*sym->forward_reference_table)
         {
+            // cout << "ADDR: " << hex << entry->patch_addr << '\n';
             section* sctn = sections[sctn_name_map[entry->sctn]];
             vector<uint8_t>& data = sctn->get_data();
             uint32_t val = sym->value;

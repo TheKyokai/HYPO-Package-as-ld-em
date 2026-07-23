@@ -1,7 +1,7 @@
 # file: main.s
 
-.extern handler
-.global my_start, my_counter
+
+.global handler, my_start, my_counter
 
 .section code
 .equ initial_sp, 0xFFFFFEFE

@@ -1,13 +1,16 @@
-#!/bin/bash
+ASSEMBLER=./bin/assembler
+LINKER=./bin/linker
+EMULATOR=./bin/emulator
 
-ASSEMBLER=assembler
-LINKER=linker
-EMULATOR=emulator
-
-${ASSEMBLER} -o out/A.o tests/linker_reloc_test/A.s
-${ASSEMBLER} -o out/B.o tests/linker_reloc_test/B.s
-${ASSEMBLER} -o out/C.o tests/linker_reloc_test/C.s
+${ASSEMBLER} -o out/main.o tests/linker_reloc_test/main.s
+${ASSEMBLER} -o out/handler.o tests/linker_reloc_test/handler.s
+${ASSEMBLER} -o out/isr_terminal.o tests/linker_reloc_test/isr_terminal.s
+${ASSEMBLER} -o out/isr_timer.o tests/linker_reloc_test/isr_timer.s
+${LINKER} -relocatable \
+  -o out/interrupt_handler.o \
+  out/isr_terminal.o out/isr_timer.o out/handler.o
 ${LINKER} -hex \
-  -o tests/linker_reloc_test/program.hex \
-  -place=text@0x40000000 out/A.o out/B.o out/C.o
-${EMULATOR} tests/linker_reloc_test/program.hex 
+  -place=code@0x40000000 \
+  -o out/program.hex \
+  out/main.o out/interrupt_handler.o
+${EMULATOR} out/program.hex
