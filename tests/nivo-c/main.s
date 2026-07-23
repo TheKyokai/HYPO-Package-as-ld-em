@@ -1,6 +1,7 @@
 # file: main.s
 
-.global handler, my_start, my_counter
+.extern handler
+.global my_start, my_counter
 
 .section code
 .equ initial_sp, 0xFFFFFEFE
@@ -10,7 +11,7 @@ my_start:
     ld $handler, %r1
     csrwr %r1, %handler
 
-    ld $0x1, %r1
+    ld $0x4, %r1
     st %r1, timer_config
 wait:
     ld my_counter, %r1

@@ -140,6 +140,73 @@ public:
 
     void set_cpdir(DIR cpd);
 
+    enum equ_expr_type 
+    {
+        EQU_ADD,
+        EQU_SUB,
+        EQU_MUL,
+        EQU_DIV,
+        EQU_SYMBOL,
+        EQU_LITERAL,
+        EQU_NEG
+    };
+
+    struct equ_expr 
+    {
+        equ_expr_type type;
+        equ_expr* left;
+        equ_expr* right;
+
+        symbol_table::symbol* symbol;
+        int value; 
+    };
+
+    struct equ_node
+    {
+        symbol_table::symbol* sym;
+        equ_expr* expression;
+
+        ~equ_node()
+        {
+            delete_equ_tree(expression);
+        }
+    };
+
+    equ_node* current_equ = nullptr;
+    vector<equ_node*> equ_resolution_list;
+
+    void begin_equ(string sym_name);
+    void end_equ(equ_expr* expr);
+
+    equ_expr* make_binary(equ_expr_type type, equ_expr* left, equ_expr* right);
+    equ_expr* make_literal(int value);
+    equ_expr* make_symbol(string sym_name);
+    equ_expr* make_neg(equ_expr* child);
+    static void delete_equ_tree(equ_expr* node);
+
+    struct equ_reloc_info
+    {
+        bool error = false;
+        bool unresolved = false;
+        
+        unordered_map<uint32_t, int> sections;
+    };
+
+    equ_reloc_info check_equ_reloc(equ_expr* expr);
+
+    struct equ_value
+    {
+        int value = 0; // ABS component
+
+        unordered_map<uint32_t, int> sections;
+    };
+
+    bool evaluate_equ_expr(equ_expr* expr, equ_value& result);
+
+    void resolve_equ();
+    bool resolve_single_equ(equ_node* node);
+    void print_equ_tree(equ_expr* node, int depth);
+
     void process_symbol(string sym);
 
     void emit_symbol(string sym_name);

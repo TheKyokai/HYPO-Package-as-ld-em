@@ -32,6 +32,7 @@ void Assembler::process_source()
     if (current_section)
         symtab.set_section_size(current_section->get_name(), current_section->get_location_ctr());
 
+    resolve_equ();
     forward_reference_fixup();
     rela_fixup();
 
@@ -288,7 +289,7 @@ void Assembler::process_symbol(string sym)
             {
                 // declaring an existing symbol global -> multiple global declarations valid
                 symbol->bind = symbol_table::BIND::GLOB;
-                cout << "Symbol '" << sym << "' declared global" << endl;
+                // cout << "Symbol '" << sym << "' declared global" << endl;
             }
         break;
     }
@@ -352,6 +353,86 @@ symbol_table::symbol* Assembler::get_symbol_for_usage(string& sym_name)
     }
     return sym;
 }
+
+
+void Assembler::begin_equ(string sym_name)
+{
+    symbol_table::symbol* sym = symtab.get_symbol_by_name(sym_name);
+    if (sym && sym->defined)
+    {
+        cerr << "Symbol '" << sym_name << "' defined multiple times" << endl;
+        return;
+    }
+    if (!sym)
+    {
+        symtab.insert_symbol(0x0, symbol_table::TYPE::NOTYP, symbol_table::BIND::LOC, sym_name, symbol_table::NDX::UND, false);
+        sym = symtab.get_symbol_by_name(sym_name);
+    }
+    current_equ = new equ_node();
+    current_equ->sym = sym;
+    equ_resolution_list.push_back(current_equ);
+}
+
+void Assembler::end_equ(equ_expr* expr)
+{
+    current_equ->expression = expr;
+    current_equ = nullptr;
+}
+
+
+Assembler::equ_expr* Assembler::make_binary(equ_expr_type type, equ_expr* left, equ_expr* right)
+{
+    equ_expr* node = new equ_expr();
+    node->type = type;
+    node->left = left;
+    node->right = right;
+    node->symbol = nullptr;
+    node->value = 0;
+    return node;
+}
+
+Assembler::equ_expr* Assembler::make_literal(int value)
+{
+    equ_expr* node = new equ_expr();
+    node->type = EQU_LITERAL;
+    node->left = nullptr;
+    node->right = nullptr;
+    node->symbol = nullptr;
+    node->value = value;
+    return node;
+}
+
+Assembler::equ_expr* Assembler::make_symbol(string sym_name)
+{
+    symbol_table::symbol* sym = symtab.get_symbol_by_name(sym_name);
+    if (!sym)
+    {
+        symtab.insert_symbol(0x0, symbol_table::TYPE::NOTYP, symbol_table::BIND::LOC, sym_name, symbol_table::NDX::UND, false);
+        sym = symtab.get_symbol_by_name(sym_name);
+    }
+    equ_expr* node = new equ_expr();
+    node->type = EQU_SYMBOL;
+    node->left = nullptr;
+    node->right = nullptr;
+    node->symbol = sym;
+    node->value = 0;
+    return node;
+}
+
+Assembler::equ_expr* Assembler::make_neg(equ_expr* child)
+{
+    equ_expr* node = new equ_expr();
+    node->type = EQU_NEG;
+    node->left = child;
+    node->right = nullptr;
+    node->symbol = nullptr;
+    node->value = 0;
+    return node;
+}
+
+
+
+
 
 
 // .word
@@ -1009,7 +1090,6 @@ void Assembler::forward_reference_fixup()
             section* sctn = sections[sctn_name_map[entry->sctn]];
             vector<uint8_t>& data = sctn->get_data();
             uint32_t val = sym->value;
-            cout << sym->name << endl;
             data[entry->patch_addr] = val & 0xFF;
             data[entry->patch_addr + 1] = (val >> 8) & 0xFF;
             data[entry->patch_addr + 2] = (val >> 16) & 0xFF;
@@ -1046,3 +1126,326 @@ void Assembler::rela_fixup()
         rela.erase(remove_if(rela.begin(), rela.end(), [](section::rela_entry entry) {return entry.symbol == symbol_table::NDX::ABS;}), rela.end());
     }
 }  
+
+
+void Assembler::resolve_equ()
+{
+    vector<equ_node*> unresolved = equ_resolution_list;
+    while (!unresolved.empty())
+    {
+        vector<equ_node*> still_unresolved;
+        for (equ_node* node:unresolved)    
+            if (resolve_single_equ(node))
+                still_unresolved.push_back(node);
+        
+        
+        // No symbols resolved in pass
+        if (still_unresolved.size() == unresolved.size())
+        {
+            cerr << "Not all .equ symbols can be resolved\n";            
+            error_detected = true;
+            break;
+        }
+
+        unresolved = move(still_unresolved);
+    }
+    if (equ_resolution_list.size() > 0)
+        for (equ_node* node:equ_resolution_list)
+            delete node; // Fix the expression mem_leak later
+    
+    equ_resolution_list.clear();
+}
+
+// Return indicates if it should be processed again
+bool Assembler::resolve_single_equ(equ_node* node)
+{
+    equ_reloc_info result = check_equ_reloc(node->expression);
+    if (result.error || result.sections.size() > 1)
+    {
+        cout << "Symbol '" << node->sym->name << "' is not relocatable\n";
+        error_detected = true;
+        return false;
+    }
+    if (result.unresolved)
+        return true;
+
+    equ_value equ_val;
+    if (!evaluate_equ_expr(node->expression, equ_val))
+        return true;
+    
+    if (equ_val.sections.empty())
+        // ABS
+        node->sym->ndx = symbol_table::NDX::ABS;
+    else
+        // Relocatable
+        node->sym->ndx = equ_val.sections.begin()->first;
+    
+
+    node->sym->value = equ_val.value;
+    node->sym->defined = true;
+
+    return false;
+}
+
+Assembler::equ_reloc_info Assembler::check_equ_reloc(equ_expr* expr)
+{
+    equ_reloc_info result;
+
+    if (!expr)
+    {
+        result.error = true;
+        return result;
+    }
+
+    switch (expr->type)
+    {
+        case EQU_LITERAL:
+            return result;
+        case EQU_SYMBOL:
+        {
+            symbol_table::symbol* sym = expr->symbol;
+
+            if (!sym->defined)
+            {
+                result.unresolved = true;
+                return result;
+            }
+
+            // Abs symbol 
+            if (sym->ndx == symbol_table::NDX::ABS)
+                return result;
+
+            uint32_t sctn = sym->ndx;
+            if (sctn == symbol_table::NDX::UND)
+                sctn = symtab.get_symbol_num(sym->name);
+            result.sections[sctn] = 1;
+            return result;
+        }
+        case EQU_NEG:
+        {
+            result = check_equ_reloc(expr->left);
+
+            for (auto& [section, coeff] : result.sections)
+                coeff = -coeff;
+
+            return result;
+        }
+        case EQU_ADD:
+        case EQU_SUB:
+        {
+            equ_reloc_info left = check_equ_reloc(expr->left);
+            equ_reloc_info right = check_equ_reloc(expr->right);
+
+            if (left.error || right.error)
+            {
+                result.error = true;
+                return result;
+            }
+
+            if (left.unresolved || right.unresolved)
+            {
+                result.unresolved = true;
+                return result;
+            }
+
+            result.sections = left.sections;
+
+            int sign = (expr->type == EQU_ADD) ? 1 : -1;
+
+            for (auto [section, coeff] : right.sections)
+                result.sections[section] += sign * coeff;
+
+            
+            for (auto it = result.sections.begin(); it != result.sections.end(); )
+                if (it->second == 0)
+                    it = result.sections.erase(it);
+                else
+                    ++it;
+            
+
+            return result;
+        }
+        // Not relocatable 
+        case EQU_MUL:
+        case EQU_DIV:
+        {
+            equ_reloc_info left = check_equ_reloc(expr->left);
+            equ_reloc_info right = check_equ_reloc(expr->right);
+
+            if (!left.sections.empty() || !right.sections.empty())
+                result.error = true;
+            
+            return result;
+        }
+    }
+
+    result.error = true;
+    return result;
+}
+
+bool Assembler::evaluate_equ_expr(equ_expr* expr, equ_value& result)
+{
+    switch(expr->type)
+    {
+        case EQU_LITERAL:
+        {
+            result.value = expr->value;
+            return true;
+        }
+        case EQU_SYMBOL:
+        {
+            auto* sym = expr->symbol;
+
+            if (!sym->defined)
+                return false;
+
+            result.value = sym->value;
+
+            if (sym->ndx == symbol_table::NDX::ABS)
+                return true;
+    
+            uint32_t sctn = sym->ndx;
+            if (sctn == symbol_table::NDX::UND)
+                sctn = symtab.get_symbol_num(sym->name);
+            result.sections[sctn] = 1;
+            return true;
+        }
+        case EQU_ADD:
+        case EQU_SUB:
+        {
+            equ_value left;
+            equ_value right;
+
+            if (!evaluate_equ_expr(expr->left, left) ||
+                !evaluate_equ_expr(expr->right, right))
+                return false;
+
+
+            result.value = left.value;
+            result.value += (expr->type == EQU_ADD)
+                          ? right.value
+                          : -right.value;
+
+
+            result.sections = left.sections;
+
+            int sign =
+                (expr->type == EQU_ADD) ? 1 : -1;
+
+
+            for (auto [section, count] : right.sections)
+                result.sections[section] += sign * count;
+
+
+            for (auto it = result.sections.begin(); it != result.sections.end(); )
+                if (it->second == 0)
+                    it = result.sections.erase(it);
+                else
+                    ++it;
+
+            return true;
+        }
+        case EQU_NEG:
+        {
+            equ_value child;
+
+            if (!evaluate_equ_expr(expr->left, child))
+                return false;
+
+            result.value = -child.value;
+
+            for (auto [section, count] : child.sections)
+                result.sections[section] = -count;
+
+            return true;
+        }
+        case EQU_MUL:
+        {
+            equ_value left;
+            equ_value right;
+
+            // Not necessary
+            if (!evaluate_equ_expr(expr->left, left) ||
+                !evaluate_equ_expr(expr->right, right))
+                return false;
+
+            result.value = left.value * right.value;
+            return true;
+        }
+        case EQU_DIV:
+        {
+            equ_value left;
+            equ_value right;
+
+            if (!evaluate_equ_expr(expr->left, left) ||
+                !evaluate_equ_expr(expr->right, right))
+                return false;
+
+            if (right.value == 0)
+            {
+                cerr << "Division by zero in .equ\n";
+                return false;
+            }
+
+            result.value = left.value / right.value;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+void Assembler::print_equ_tree(equ_expr* node, int depth)
+{
+    if (!node)
+        return;
+
+    for (int i = 0; i < depth; i++)
+        cout << "  ";
+
+    switch (node->type)
+    {
+        case EQU_ADD:
+            cout << "+" << endl;
+            break;
+
+        case EQU_SUB:
+            cout << "-" << endl;
+            break;
+
+        case EQU_MUL:
+            cout << "*" << endl;
+            break;
+
+        case EQU_DIV:
+            cout << "/" << endl;
+            break;
+
+        case EQU_NEG:
+            cout << "NEG" << endl;
+            break;
+
+        case EQU_SYMBOL:
+            cout << "SYM: " << node->symbol->name << endl;
+            break;
+
+        case EQU_LITERAL:
+            cout << "LIT: 0x" << hex << node->value << dec << endl;
+            break;
+    }
+
+    print_equ_tree(node->left, depth + 1);
+    print_equ_tree(node->right, depth + 1);
+}
+
+void Assembler::delete_equ_tree(equ_expr* node)
+{
+    if (!node)
+        return;
+    
+    delete_equ_tree(node->left);
+    delete_equ_tree(node->right);
+
+    delete node;
+}

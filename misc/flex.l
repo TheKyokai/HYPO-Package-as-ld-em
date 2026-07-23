@@ -89,6 +89,8 @@ csrwr			{ return yy::parser::make_INST_CSRWR(loc); }
 :		    	{ return yy::parser::make_COLON(loc); }
 ,		    	{ return yy::parser::make_COMMA(loc); }
 \$			    { return yy::parser::make_IMM_PREFIX(loc); }
+\(		    	{ return yy::parser::make_L_PAREN(loc); }
+\)		    	{ return yy::parser::make_R_PAREN(loc); }
 \[		    	{ return yy::parser::make_L_BRACKET(loc); }
 \]		    	{ return yy::parser::make_R_BRACKET(loc); }
 \n		    	{ loc.lines(yyleng); loc.step(); return yy::parser::make_YYEOL(loc); }

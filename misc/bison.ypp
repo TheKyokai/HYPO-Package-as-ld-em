@@ -56,10 +56,16 @@ yy::parser::symbol_type yylex();
 %token <int> GPR CSR
 
 %token COLON COMMA IMM_PREFIX L_BRACKET R_BRACKET YYEOL
-%token PLUS MINUS MUL DIV
+%token PLUS MINUS MUL DIV L_PAREN R_PAREN
 
 %token <int> NUM_LITERAL
 %token <string> SYMBOL STR_LITERAL
+
+
+%type <Assembler::equ_expr*> equ_expression
+%type <Assembler::equ_expr*> equ_term
+%type <Assembler::equ_expr*> equ_factor
+
 
 %%
 
@@ -93,7 +99,7 @@ directive:      ASMD_GLOBAL { assembler.set_cpdir(Assembler::DIR::GLOBAL); } sym
                 |
                 ASMD_ASCII STR_LITERAL[str_lit] { assembler.emit_string($str_lit); }
                 |
-                ASMD_EQU SYMBOL[new_symbol] COMMA NUM_LITERAL[val]
+                ASMD_EQU SYMBOL[new_symbol] { assembler.begin_equ($new_symbol); } COMMA equ_expression { assembler.end_equ($5); }
                 ;
 
 
@@ -109,6 +115,30 @@ sym_lit_list:   SYMBOL[symbol_name] { assembler.emit_symbol($symbol_name); }
                 sym_lit_list COMMA SYMBOL[symbol_name] { assembler.emit_symbol($symbol_name); }
                 |
                 sym_lit_list COMMA NUM_LITERAL[num_lit] { assembler.emit_num_literal($num_lit); }
+                ;
+
+
+equ_expression: equ_term { $$ = $1; }
+                |
+                MINUS equ_term { $$ = assembler.make_neg($2);}
+                |
+                equ_expression PLUS equ_term { $$ = assembler.make_binary(Assembler::equ_expr_type::EQU_ADD, $1, $3); }
+                |
+                equ_expression MINUS equ_term { $$ = assembler.make_binary(Assembler::equ_expr_type::EQU_SUB, $1, $3); }
+                ;
+
+equ_term:       equ_factor { $$ = $1; }
+                |
+                equ_term MUL equ_factor { $$ = assembler.make_binary(Assembler::equ_expr_type::EQU_MUL, $1, $3); }
+                |
+                equ_term DIV equ_factor { $$ = assembler.make_binary(Assembler::equ_expr_type::EQU_DIV, $1, $3); }
+                ;
+
+equ_factor:     SYMBOL { $$ = assembler.make_symbol($1); }
+                |
+                NUM_LITERAL { $$ = assembler.make_literal($1); }
+                |
+                L_PAREN equ_expression R_PAREN { $$ = $2; }
                 ;
 
 
