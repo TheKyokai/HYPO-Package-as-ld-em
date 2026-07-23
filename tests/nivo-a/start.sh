@@ -14,4 +14,4 @@ ${LINKER} -hex \
   -place=my_code@0x40000000 -place=math@0xF0000000 \
   -o tests/nivo-a/program.hex \
   out/handler.o out/math.o out/main.o out/isr_terminal.o out/isr_timer.o out/isr_software.o
-${EMULATOR} program.hex
+${EMULATOR} tests/nivo-a/program.hex

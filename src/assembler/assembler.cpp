@@ -40,7 +40,14 @@ void Assembler::process_source()
 
 void Assembler::generate_output()
 {
-    if (error_detected || undefined_symbols)
+    // symtab.print_sym_tab(cout);
+    if (undefined_symbols)
+    {
+        cerr << "Undefined local symbols - No output will be generated" << endl;
+        return;   
+    }    
+
+    if (error_detected)
     {
         cerr << "Error detected - No output will be generated" << endl;
         return;   
@@ -232,7 +239,7 @@ void Assembler::start_new_section(string sctn_name)
             // New symbol added to symtab
             symbol_table::symbol* sctn_sym = symtab.get_symbol_by_name(sctn_name);
             current_section = new section(sctn_name, sctn_sym->ndx);
-            sections.push_back(current_section);  
+            sections.push_back(current_section);
             break;
         }
         case -1:
@@ -247,6 +254,8 @@ void Assembler::start_new_section(string sctn_name)
             sctn_sym->type = symbol_table::TYPE::SCTN;
             sctn_sym->ndx = symtab.get_symbol_num(sctn_name);
             sctn_sym->defined = true;
+            current_section = new section(sctn_name, sctn_sym->ndx);
+            sections.push_back(current_section);
             break;
         }
         default:
@@ -255,7 +264,6 @@ void Assembler::start_new_section(string sctn_name)
             return;
         }
     }
-    //TODO Add error handling -> Let the parser parse the whole file, but dont generate anything
 }
 
 void Assembler::set_cpdir(DIR cpd)
@@ -448,10 +456,9 @@ void Assembler::emit_string(string str)
         cerr << "Unexpected generation" << endl;
         return;
     }
-    ensure_literal_pool(str.size() + 1);
+    ensure_literal_pool(str.size());
     for (char c: str)
         current_section->emit_byte(c);
-    current_section->emit_byte(0x00);
 }
 
 void Assembler::emit_op(OP_CODE op_code, OP_MOD op_mod, OP_GPR gpr_A, OP_GPR gpr_B, OP_GPR gpr_C, uint16_t disp)
@@ -488,7 +495,7 @@ void Assembler::process_ret()
 void Assembler::process_iret()
 {
     ensure_literal_pool(8);
-    emit_op(OP_CODE::OP_LD, OP_MOD::MOD_6, OP_GPR::GPR_PC, OP_GPR::GPR_SP, OP_GPR::GPR_0, 4);
+    emit_op(OP_CODE::OP_LD, OP_MOD::MOD_6, static_cast<OP_GPR>(OP_CSR::CSR_STATUS), OP_GPR::GPR_SP, OP_GPR::GPR_0, 4);
     emit_op(OP_CODE::OP_LD, OP_MOD::MOD_3, OP_GPR::GPR_PC, OP_GPR::GPR_SP, OP_GPR::GPR_0, 8);
 }
 
@@ -599,7 +606,7 @@ void Assembler::process_csr_op(CSR_OP_TYPE type, OP_CSR csr, OP_GPR gpr)
         }
         case CSR_WR:
         {
-            emit_op(OP_CODE::OP_LD, OP_MOD::MOD_5, static_cast<Assembler::OP_GPR>(csr), gpr, OP_GPR::GPR_0, 0x000);
+            emit_op(OP_CODE::OP_LD, OP_MOD::MOD_4, static_cast<Assembler::OP_GPR>(csr), gpr, OP_GPR::GPR_0, 0x000);
             break;
         }
         default:
@@ -769,9 +776,8 @@ void Assembler::process_ld(OP_GPR gpr)
         }
         case GPR_IND:
         {
-            ensure_literal_pool(8);
-            emit_op(OP_CODE::OP_LD, OP_MOD::MOD_1, gpr, static_cast<OP_GPR>(operand_gpr), OP_GPR::GPR_0, 0x000);
-            emit_op(OP_CODE::OP_LD, OP_MOD::MOD_2, gpr, gpr, OP_GPR::GPR_0, 0x000);
+            ensure_literal_pool(4);
+            emit_op(OP_CODE::OP_LD, OP_MOD::MOD_2, gpr, static_cast<OP_GPR>(operand_gpr), OP_GPR::GPR_0, 0x000);
             break;
         }
         case GPR_LIT_DISP:
@@ -824,8 +830,7 @@ void Assembler::process_st(OP_GPR gpr)
     {
         case LIT:
         {
-            register_lit_pool_usage(current_section->get_location_ctr(), nullptr, operand_lit);
-            emit_op(OP_CODE::OP_ST, OP_MOD::MOD_0, OP_GPR::GPR_0, OP_GPR::GPR_PC, gpr, 0x000);
+            cerr << "Invalid operand for st: $<literal>" << endl;
             break;
         }
         case LIT_IND:
@@ -836,8 +841,7 @@ void Assembler::process_st(OP_GPR gpr)
         }
         case SYM:
         {
-            register_lit_pool_usage(current_section->get_location_ctr(), operand_sym, 0);
-            emit_op(OP_CODE::OP_ST, OP_MOD::MOD_0, OP_GPR::GPR_0, OP_GPR::GPR_PC, gpr, 0x000);
+            cerr << "Invalid operand for st: $<symbol>" << endl;
             break;
         }
         case SYM_IND:
@@ -848,12 +852,12 @@ void Assembler::process_st(OP_GPR gpr)
         }
         case GPR:
         {
-            emit_op(OP_CODE::OP_ST, OP_MOD::MOD_0, OP_GPR::GPR_0, static_cast<OP_GPR>(operand_gpr), gpr, 0x000);
+            cerr << "Invalid operand for st: <gprX>" << endl;
             break;
         }
         case GPR_IND:
         {
-            emit_op(OP_CODE::OP_ST, OP_MOD::MOD_2, OP_GPR::GPR_0, static_cast<OP_GPR>(operand_gpr), gpr, 0x000);
+            emit_op(OP_CODE::OP_ST, OP_MOD::MOD_0, OP_GPR::GPR_0, static_cast<OP_GPR>(operand_gpr), gpr, 0x000);
             break;
         }
         case GPR_LIT_DISP:
@@ -951,7 +955,7 @@ void Assembler::register_lit_pool_usage(uint32_t patch_offset, symbol_table::sym
     }
     for (lit_pool_usage_entry* entry:*lit_pool_usages)
     {
-        if ((sym !=nullptr && sym == entry->sym) || (sym == nullptr && lit == entry->lit))
+        if ((sym !=nullptr && sym == entry->sym) || (sym == nullptr && entry->sym == nullptr && lit == entry->lit))
         {   
             entry->patch_offsets.push_back(patch_offset);
             return;

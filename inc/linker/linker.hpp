@@ -69,7 +69,9 @@ private:
     bool resolve_single_obj_relocation(ld_obj* obj);
 
     void generate_hex();
+    void write_row(ofstream& out, ofstream& hex_out, uint32_t row_addr, uint8_t row[], bool& row_valid);
     void generate_relocatable();
+    uint32_t generate_symtab_bin(ostream& obj);
 
     ld_section* get_section_by_name(vector<ld_section*>& sections, string& section_name);
 };

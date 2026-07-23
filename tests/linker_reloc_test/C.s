@@ -1,7 +1,7 @@
 
-.section .text
-loc_C:
+.section data
     .word 0xFAFAFAFA
+loc_C:
     .word loc_C
 
 .end

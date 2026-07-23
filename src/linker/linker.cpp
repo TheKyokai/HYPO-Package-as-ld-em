@@ -42,10 +42,11 @@ void linker::link_input_obj()
         return;
     }
 
-    symtab.print_sym_tab(cout);
+    //DEBUG PRINT
+    // symtab.print_sym_tab(cout);
 
-    for (ld_section* sctn:sections)
-        sctn->print_section(cout);
+    // for (ld_section* sctn:sections)
+    //     sctn->print_section(cout);
     
     if (options.hex)
         generate_hex();
@@ -427,7 +428,8 @@ void linker::generate_hex()
     {
         cerr << "No output files will be generated" << endl;   
         return;
-    }
+    }    
+    
 
     string text_out;
     size_t dot_index = options.output_file.find_last_of('.');
@@ -444,6 +446,14 @@ void linker::generate_hex()
         return;
     }
 
+    ofstream hex_out(options.output_file, ios::binary);
+
+    if (!hex_out)
+    {
+        cerr << "Cannot open output file\n";
+        return;
+    }
+
     vector<ld_section*> sorted_sections = sections;
 
     sort(
@@ -453,51 +463,6 @@ void linker::generate_hex()
     );
 
 
-    for (ld_section* section : sorted_sections)
-    {
-        uint32_t address = section->get_address();
-        vector<uint8_t>& data = section->get_data();
-
-        for (size_t i = 0; i < data.size(); i += 8)
-        {
-            out << "0x"
-                << uppercase
-                << hex
-                << setw(8)
-                << setfill('0')
-                << right
-                << address + i
-                << ": ";
-
-            for (size_t j = 0; j < 8; j++)
-            {
-                if (i + j < data.size())
-                {
-                    out << setw(2)
-                        << static_cast<int>(data[i + j]);
-                }
-                else
-                {
-                    out << "00";
-                }
-
-                if (j != 7)
-                    out << " ";
-            }
-
-            out << '\n' << left;
-        }
-    }
-
-
-    ofstream hex_out(options.output_file, ios::binary);
-
-    if (!hex_out)
-    {
-        cerr << "Cannot open output file\n";
-        return;
-    }
-
     uint32_t magic_num = 0x4D454D45;
 
     hex_out.write(
@@ -505,33 +470,262 @@ void linker::generate_hex()
         sizeof(magic_num)
     );
 
+
+    // HEX Generation
+
+    uint32_t current_row_addr = 0;
+    uint8_t current_row[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    bool row_valid = false;
+
+
     for (ld_section* section : sorted_sections)
     {
         uint32_t address = section->get_address();
         vector<uint8_t>& data = section->get_data();
 
-        for (size_t i = 0; i < data.size(); i += 8, address += 8)
+        for (size_t i = 0; i < data.size(); i++)
         {
-            hex_out.write(
-                reinterpret_cast<char*>(&address),
-                sizeof(address)
-            );
+            uint32_t byte_addr = address + i;
+            uint32_t row_addr = byte_addr & ~0x7;
+            uint32_t offset = byte_addr & 0x7;
 
-            for (size_t j = 0; j < 8; j++)
+            
+            if (!row_valid)
             {
-                if (i + j >= data.size())
-                    hex_out.put(0x00);
-                else
-                    hex_out.put(data[i + j]);
+                current_row_addr = row_addr;
+                row_valid = true;
             }
+            else if (row_addr != current_row_addr)
+            {
+                write_row(out, hex_out, current_row_addr, current_row, row_valid);
+                current_row_addr = row_addr;
+                row_valid = true;
+            }
+
+            current_row[offset] = data[i];
         }
     }
 
-    hex_out.close();
+    // Write row
+    write_row(out, hex_out, current_row_addr, current_row, row_valid);
 
+
+    // Generation done
+    out.close();
+    hex_out.close();
+}
+
+void linker::write_row(ofstream& out, ofstream& hex_out, uint32_t row_addr, uint8_t row[], bool& row_valid)
+{
+    if (!row_valid)
+            return;
+
+    // Out
+    out << "0x"
+        << uppercase
+        << hex
+        << setw(8)
+        << setfill('0')
+        << row_addr
+        << ": ";
+
+    for (int i = 0; i < 8; i++)
+    {
+        out << setw(2)
+            << static_cast<int>(row[i]);
+
+        if (i != 7)
+            out << " ";
+    }
+
+    out << '\n';
+
+
+    // Hex
+    hex_out.write(
+        reinterpret_cast<char*>(&row_addr),
+        sizeof(row_addr)
+    );
+
+    hex_out.write(
+        reinterpret_cast<char*>(row),
+        sizeof(uint8_t) * 8
+    );
+
+    row_valid = false;
+    for (size_t i = 0; i < 8; i++)
+        row[i] = 0x00;
 }
 
 void linker::generate_relocatable()
 {
-    //TODO Copy tomorrow from assembler
+    string text_out;
+    size_t dot_index = options.output_file.find_last_of('.');
+    if (dot_index == string::npos)
+        text_out = options.output_file + ".out";
+    else
+        text_out = options.output_file.substr(0, dot_index) + ".out";
+
+    ofstream out(text_out);
+
+    if (!out)
+    {
+        cerr << "Unable to open out file\n";
+        return;
+    }
+
+    symtab.print_sym_tab(out);
+
+    for (ld_section* sctn : sections)
+        sctn->print_section(out);
+
+    out.close();
+
+    ofstream obj(options.output_file, ios::binary);
+
+    if (!obj)
+    {
+        cerr << "Cannot open object file\n";
+        return;
+    }
+
+    bin_hdr header;
+    header.magic = 0x41534D4F;
+    header.section_count = sections.size();
+    header.symbol_count = symtab.get_symbols().size();
+    header.relocation_count = 0;
+    for (ld_section* sctn:sections)
+    {
+        header.relocation_count += sctn->get_rela().size();
+    }
+
+    header.file_size = -1;
+
+    obj.write(
+        reinterpret_cast<char*>(&header),
+        sizeof(header)
+    );
+
+    vector<ld_section::section_hdr> section_headers;
+    for (ld_section* sctn:sections)
+    {
+        ld_section::section_hdr shdr = sctn->get_header();
+        section_headers.push_back(shdr);
+        obj.write(
+            reinterpret_cast<char*>(&shdr),
+            sizeof(shdr)
+        );
+    }
+    
+    header.symbol_table_offset = obj.tellp();
+    header.string_table_offset = generate_symtab_bin(obj);
+    header.relocation_table_offset = obj.tellp();
+
+    uint32_t current_rela_offset = 0;
+    for (size_t i = 0; i < section_headers.size(); i++)
+    {
+        ld_section::section_hdr& shdr = section_headers[i];
+        ld_section* sctn = sections[i];
+        
+        shdr.relocation_offset = current_rela_offset;
+        for (ld_section::rela_entry& entry:sctn->get_rela())
+        {
+            obj.write(
+                reinterpret_cast<char*>(&entry),
+                sizeof(entry)
+            );
+            current_rela_offset += sizeof(entry);
+        }
+    }
+
+    header.data_offset = obj.tellp();
+
+    uint32_t current_data_offset = 0;
+    for (size_t i = 0; i < section_headers.size(); i++)
+    {
+        ld_section::section_hdr& shdr = section_headers[i];
+        ld_section* sctn = sections[i];
+        
+        shdr.data_offset = current_data_offset;
+        for (uint8_t& data_byte:sctn->get_data())
+        {
+            obj.put(data_byte);
+            current_data_offset++;
+        }
+    }
+
+    header.file_size = obj.tellp();
+
+
+    // Offset fixup
+    obj.seekp(20);
+    obj.write(
+        reinterpret_cast<char*>(&header.symbol_table_offset),
+        sizeof(header.symbol_table_offset)
+    );
+    obj.write(
+        reinterpret_cast<char*>(&header.string_table_offset),
+        sizeof(header.string_table_offset)
+    );
+    obj.write(
+        reinterpret_cast<char*>(&header.relocation_table_offset),
+        sizeof(header.relocation_table_offset)
+    );
+    obj.write(
+        reinterpret_cast<char*>(&header.data_offset),
+        sizeof(header.data_offset)
+    );
+    obj.write(
+        reinterpret_cast<char*>(&header.file_size),
+        sizeof(header.file_size)
+    );
+
+    for (size_t i = 0; i < section_headers.size(); i++)
+    {
+        ld_section::section_hdr& shdr = section_headers[i];
+        obj.seekp(header.section_table_offset + i * sizeof(ld_section::section_hdr) + sizeof(shdr.name) + sizeof(shdr.relocation_count) + sizeof(shdr.size));
+        obj.write(
+            reinterpret_cast<char*>(&shdr.relocation_offset),
+            sizeof(shdr.relocation_offset)
+        );
+        obj.write(
+            reinterpret_cast<char*>(&shdr.data_offset),
+            sizeof(shdr.data_offset)
+        );
+    }
+
+    obj.close();
 }
+
+uint32_t linker::generate_symtab_bin(ostream& obj)
+{
+    vector<char> string_table;
+    for (ld_symbol_table::symbol* sym:symtab.get_symbols())
+    {
+        ld_symbol_table::symbol_hdr symhdr;
+        symhdr.name_offset = string_table.size();
+        for (char& c:sym->name)
+            string_table.push_back(c);
+        string_table.push_back('\0');
+
+        symhdr.value = sym->value;
+        symhdr.size = sym->size;
+        symhdr.ndx = sym->ndx;
+        symhdr.type = static_cast<uint8_t>(sym->type);
+        symhdr.bind = static_cast<uint8_t>(sym->bind);
+
+        obj.write(
+            reinterpret_cast<char*>(&symhdr),
+            sizeof(symhdr)
+        );
+    }
+
+    uint32_t string_table_offset = obj.tellp();
+
+
+    for (char& c:string_table)
+        obj.put(c);
+    
+    return string_table_offset;
+}
+
